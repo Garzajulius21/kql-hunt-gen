@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KQL Hunt Gen — Sentinel Hunting Query Generator</title>
+<style>
+  :root {
+    --bg-base:    #080c14;
+    --bg-card:    #0d1422;
+    --bg-input:   #111827;
+    --bg-code:    #060a10;
+    --border:     #1e2d44;
+    --border-hi:  #2a4060;
+    --cyan:       #00d4ff;
+    --cyan-dim:   #0097b8;
+    --green:      #00ff88;
+    --green-dim:  #00b360;
+    --orange:     #ff9500;
+    --red:        #ff4444;
+    --purple:     #a855f7;
+    --text:       #c9d8ee;
+    --text-dim:   #5a7a9a;
+    --text-muted: #3a5a7a;
+    --mono:       'Courier New', 'Lucida Console', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text);
+    font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,.06) 2px, rgba(0,0,0,.06) 4px
+    );
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #060e1e 0%, #0a1828 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+  .header-brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-family: var(--mono); font-weight: bold;
+    color: var(--bg-base);
+    box-shadow: 0 0 16px rgba(0,212,255,.3);
+    flex-shrink: 0;
+  }
+  .brand-text h1 { font-size: 17px; font-weight: 700; letter-spacing: .04em; color: #fff; }
+  .brand-text p  { font-size: 11px; color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase; }
+  .header-status { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-muted);
+    transition: background .3s, box-shadow .3s;
+  }
+  .status-dot.ready { background: var(--green);  box-shadow: 0 0 6px var(--green-dim); }
+  .status-dot.busy  { background: var(--orange); box-shadow: 0 0 6px var(--orange); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+    display: grid; gap: 20px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .card:focus-within { border-color: var(--border-hi); }
+  .card-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(0,0,0,.2);
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .1em;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .tag {
+    background: rgba(0,212,255,.1); color: var(--cyan);
+    border: 1px solid rgba(0,212,255,.2);
+    border-radius: 4px; padding: 1px 6px; font-size: 10px;
+  }
+  .card-title .tag-green {
+    background: rgba(0,255,136,.1); color: var(--green);
+    border: 1px solid rgba(0,255,136,.2);
+    border-radius: 4px; padding: 1px 6px; font-size: 10px;
+  }
+  .card-body { padding: 18px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; padding: 8px 16px;
+    transition: all .15s; white-space: nowrap;
+    letter-spacing: .02em;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary {
+    background: linear-gradient(135deg, #0088cc, #0055aa);
+    color: #fff; box-shadow: 0 0 12px rgba(0,136,204,.25);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #00aaff, #0077cc);
+    box-shadow: 0 0 20px rgba(0,170,255,.4); transform: translateY(-1px);
+  }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-ghost {
+    background: transparent; color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--border-hi); color: var(--text); background: rgba(255,255,255,.03);
+  }
+  .btn-export {
+    background: linear-gradient(135deg, #006633, #004422);
+    color: var(--green); border: 1px solid rgba(0,255,136,.2);
+    box-shadow: 0 0 10px rgba(0,255,136,.1);
+  }
+  .btn-export:hover:not(:disabled) {
+    background: linear-gradient(135deg, #008844, #005533);
+    box-shadow: 0 0 18px rgba(0,255,136,.25); transform: translateY(-1px);
+  }
+  .btn-copy {
+    padding: 5px 10px; font-size: 11px;
+    background: rgba(0,212,255,.08); color: var(--cyan);
+    border: 1px solid rgba(0,212,255,.2); border-radius: 4px;
+  }
+  .btn-copy:hover:not(:disabled) { background: rgba(0,212,255,.18); }
+  .btn-copy.copied {
+    color: var(--green); border-color: rgba(0,255,136,.3); background: rgba(0,255,136,.08);
+  }
+  .btn-parse {
+    background: linear-gradient(135deg, #4a1d8a, #2d1060);
+    color: #c084fc; border: 1px solid rgba(168,85,247,.3);
+    box-shadow: 0 0 10px rgba(168,85,247,.15);
+  }
+  .btn-parse:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5d25a8, #3a1480);
+    box-shadow: 0 0 18px rgba(168,85,247,.3); transform: translateY(-1px);
+  }
+  .btn-ai {
+    background: linear-gradient(135deg, #1a4a6e, #0d2d46);
+    color: #7dd3fc; border: 1px solid rgba(125,211,252,.3);
+    box-shadow: 0 0 10px rgba(125,211,252,.1);
+    text-decoration: none;
+  }
+  .btn-ai:hover {
+    background: linear-gradient(135deg, #1e5a85, #123760);
+    box-shadow: 0 0 18px rgba(125,211,252,.25); transform: translateY(-1px);
+  }
+
+  /* ── AI Provider selector ── */
+  .ai-selector-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ai-provider-select {
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px;
+    padding: 6px 10px; outline: none; cursor: pointer;
+  }
+  .ai-provider-select:focus { border-color: var(--cyan-dim); }
+
+  /* ── Prompt textarea ── */
+  .prompt-wrap { position: relative; }
+  textarea#prompt {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; line-height: 1.7;
+    padding: 14px 16px; resize: vertical; min-height: 110px;
+    outline: none; transition: border-color .2s, box-shadow .2s; font-family: inherit;
+  }
+  textarea#prompt:focus {
+    border-color: var(--cyan-dim); box-shadow: 0 0 0 2px rgba(0,212,255,.08);
+  }
+  textarea#prompt::placeholder { color: var(--text-muted); }
+  .char-count {
+    position: absolute; bottom: 10px; right: 12px;
+    font-size: 11px; color: var(--text-muted); pointer-events: none;
+  }
+
+  /* ── Examples strip ── */
+  .examples-label {
+    font-size: 11px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px;
+  }
+  .examples-strip { display: flex; flex-wrap: wrap; gap: 7px; }
+  .example-pill {
+    background: rgba(30,45,68,.6); border: 1px solid var(--border);
+    border-radius: 20px; color: var(--text-dim); font-size: 12px;
+    padding: 5px 12px; cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .example-pill:hover {
+    border-color: var(--cyan-dim); color: var(--cyan); background: rgba(0,212,255,.06);
+  }
+
+  /* ── Generate bar ── */
+  .generate-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .hunt-meta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .meta-select {
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px;
+    padding: 6px 10px; outline: none; cursor: pointer;
+  }
+  .meta-select:focus { border-color: var(--cyan-dim); }
+
+  /* ── Built prompt textarea ── */
+  textarea.built-prompt-ta {
+    width: 100%; background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 6px; color: #a8c0d8; font-family: var(--mono);
+    font-size: 12px; line-height: 1.65; padding: 14px 16px;
+    resize: vertical; min-height: 260px; max-height: 480px;
+    outline: none; transition: border-color .2s;
+  }
+  textarea.built-prompt-ta:focus { border-color: var(--cyan-dim); }
+
+  /* ── Workflow steps badge ── */
+  .step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .step-badge-blue  { background: rgba(0,136,204,.2);  color: var(--cyan);   border: 1px solid rgba(0,212,255,.3); }
+  .step-badge-green { background: rgba(0,255,136,.12); color: var(--green);  border: 1px solid rgba(0,255,136,.3); }
+
+  /* ── Workflow instructions ── */
+  .workflow-steps {
+    display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;
+  }
+  .workflow-step {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: var(--text-dim); line-height: 1.5;
+  }
+  .workflow-step strong { color: var(--text); }
+
+  /* ── Response paste area ── */
+  textarea#ai-response {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-family: var(--mono);
+    font-size: 12px; line-height: 1.65; padding: 14px 16px;
+    resize: vertical; min-height: 160px; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  textarea#ai-response:focus {
+    border-color: rgba(168,85,247,.5); box-shadow: 0 0 0 2px rgba(168,85,247,.08);
+  }
+  textarea#ai-response::placeholder { color: var(--text-muted); }
+
+  /* ── Collapsible cards ── */
+  .collapsible { display: none; }
+  .collapsible.visible { display: block; }
+
+  /* ── Result panels ── */
+  #results { display: none; }
+  #results.visible { display: grid; gap: 20px; }
+
+  /* ── KQL Code block ── */
+  .kql-block { background: var(--bg-code); border-radius: 6px; overflow-x: auto; }
+  .kql-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,.3);
+  }
+  .kql-lang-tag {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--cyan); letter-spacing: .06em; text-transform: uppercase;
+  }
+  pre#kql-output {
+    font-family: var(--mono); font-size: 13px; line-height: 1.7; color: #e0e8f0;
+    padding: 18px 18px 18px 14px; white-space: pre; overflow-x: auto; margin: 0; tab-size: 4;
+  }
+
+  /* KQL syntax highlight */
+  .kw  { color: #569cd6; }
+  .fn  { color: #dcdcaa; }
+  .op  { color: #c586c0; }
+  .str { color: #ce9178; }
+  .cm  { color: #6a9955; font-style: italic; }
+  .tb  { color: #4ec9b0; }
+  .num { color: #b5cea8; }
+  .var { color: #9cdcfe; }
+
+  /* ── MITRE cards ── */
+  .mitre-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .mitre-card {
+    background: rgba(168,85,247,.07); border: 1px solid rgba(168,85,247,.25);
+    border-radius: 8px; padding: 10px 14px; min-width: 180px;
+  }
+  .mitre-id   { font-family: var(--mono); font-size: 12px; color: var(--purple); font-weight: 700; margin-bottom: 4px; }
+  .mitre-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .mitre-tactic { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+
+  /* ── Explanation sections ── */
+  .explanation-body { display: grid; gap: 18px; }
+  .expl-section h3 {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--cyan); margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+  }
+  .expl-section h3::before {
+    content: ''; display: block; width: 3px; height: 14px;
+    background: var(--cyan); border-radius: 2px;
+  }
+  .expl-section p, .expl-section li { color: var(--text); font-size: 13px; line-height: 1.75; }
+  .expl-section ul { list-style: none; padding: 0; display: grid; gap: 5px; }
+  .expl-section ul li { padding-left: 18px; position: relative; }
+  .expl-section ul li::before { content: '›'; position: absolute; left: 0; color: var(--cyan-dim); }
+
+  .severity-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 4px; padding: 3px 10px;
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  }
+  .sev-high   { background: rgba(255,68,68,.12);  color: var(--red);    border: 1px solid rgba(255,68,68,.3); }
+  .sev-medium { background: rgba(255,149,0,.12);  color: var(--orange); border: 1px solid rgba(255,149,0,.3); }
+  .sev-low    { background: rgba(0,255,136,.12);  color: var(--green);  border: 1px solid rgba(0,255,136,.3); }
+  .sev-info   { background: rgba(0,212,255,.12);  color: var(--cyan);   border: 1px solid rgba(0,212,255,.3); }
+
+  /* ── Error panel ── */
+  #error-panel {
+    display: none; background: rgba(255,68,68,.06);
+    border: 1px solid rgba(255,68,68,.25); border-radius: 8px; padding: 16px 18px;
+  }
+  #error-panel.visible { display: flex; gap: 12px; align-items: flex-start; }
+  .error-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  #error-msg { font-size: 13px; color: #ff8888; line-height: 1.6; }
+
+  /* ── Export footer ── */
+  .export-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; padding-top: 4px;
+  }
+  .hunt-id { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: 4px 0; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* ── PDF Upload Zone ── */
+  .pdf-drop-zone {
+    border: 2px dashed var(--border-hi);
+    border-radius: 10px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background: rgba(0,0,0,.15);
+    position: relative;
+  }
+  .pdf-drop-zone:hover,
+  .pdf-drop-zone.dragover {
+    border-color: var(--orange);
+    background: rgba(255,149,0,.04);
+    box-shadow: 0 0 20px rgba(255,149,0,.08);
+  }
+  .pdf-drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .pdf-drop-icon {
+    font-size: 30px; margin-bottom: 10px; line-height: 1;
+    filter: drop-shadow(0 0 8px rgba(255,149,0,.3));
+  }
+  .pdf-drop-title {
+    font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px;
+  }
+  .pdf-drop-sub {
+    font-size: 12px; color: var(--text-muted);
+  }
+
+  /* ── PDF Processing state ── */
+  .pdf-processing {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 20px; color: var(--text-dim); font-size: 13px;
+  }
+  .pdf-spin {
+    width: 20px; height: 20px; border: 2px solid var(--border-hi);
+    border-top-color: var(--orange); border-radius: 50%;
+    animation: spin .8s linear infinite; flex-shrink: 0;
+  }
+
+  /* ── PDF Summary ── */
+  .pdf-summary { display: grid; gap: 14px; }
+  .pdf-file-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,149,0,.06);
+    border: 1px solid rgba(255,149,0,.2);
+    border-radius: 7px; padding: 10px 14px;
+  }
+  .pdf-file-icon { font-size: 20px; flex-shrink: 0; }
+  .pdf-file-name { font-size: 13px; font-weight: 600; color: var(--orange); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pdf-file-meta { font-size: 11px; color: var(--text-muted); }
+
+  .pdf-ioc-section h4 {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px;
+  }
+  .ioc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ioc-chip {
+    font-family: var(--mono); font-size: 11px;
+    border-radius: 4px; padding: 3px 8px;
+    white-space: nowrap; max-width: 260px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .ioc-ip      { background: rgba(255,68,68,.1);   color: #ff8888; border: 1px solid rgba(255,68,68,.25); }
+  .ioc-domain  { background: rgba(0,212,255,.08);  color: var(--cyan); border: 1px solid rgba(0,212,255,.2); }
+  .ioc-hash    { background: rgba(168,85,247,.08); color: #c084fc; border: 1px solid rgba(168,85,247,.22); }
+  .ioc-cve     { background: rgba(255,149,0,.1);   color: var(--orange); border: 1px solid rgba(255,149,0,.25); }
+  .ioc-path    { background: rgba(78,201,176,.08); color: #4ec9b0; border: 1px solid rgba(78,201,176,.2); }
+  .ioc-tactic  { background: rgba(0,255,136,.08);  color: var(--green); border: 1px solid rgba(0,255,136,.2); font-family: inherit; font-size: 11px; }
+  .ioc-none    { color: var(--text-muted); font-size: 12px; font-style: italic; }
+
+  .pdf-desc-preview {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px 14px;
+    font-size: 13px; color: var(--text); line-height: 1.7;
+  }
+  .pdf-desc-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-dim); margin-bottom: 6px;
+  }
+
+  .pdf-warn {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: rgba(255,149,0,.06); border: 1px solid rgba(255,149,0,.2);
+    border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #ffb84d;
+  }
+
+  /* ── Data warning banner ── */
+  .data-warning-banner {
+    background: linear-gradient(90deg, rgba(255,149,0,.12), rgba(255,149,0,.07));
+    border-bottom: 1px solid rgba(255,149,0,.3);
+    padding: 9px 24px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: #ffb84d; line-height: 1.4;
+  }
+  .data-warning-banner svg { flex-shrink: 0; }
+  .data-warning-banner strong { color: #ffd080; }
+
+  /* ── Info strip ── */
+  .info-strip {
+    background: rgba(0,212,255,.04);
+    border: 1px solid rgba(0,212,255,.12);
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 12px; color: var(--text-dim); line-height: 1.6;
+  }
+  .info-strip svg { flex-shrink: 0; margin-top: 1px; }
+  .info-strip a { color: var(--cyan-dim); text-decoration: none; }
+  .info-strip a:hover { text-decoration: underline; }
+
+  /* ── Example category pills ── */
+  .examples-category {
+    font-size: 10px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; border-radius: 3px; padding: 1px 5px; margin-right: 5px;
+    vertical-align: middle; line-height: 1;
+  }
+  .cat-insider { background: rgba(255,149,0,.15); color: var(--orange); }
+  .cat-exfil   { background: rgba(168,85,247,.15); color: var(--purple); }
+  .cat-general { background: rgba(0,212,255,.12);  color: var(--cyan); }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .generate-bar { flex-direction: column; align-items: stretch; }
+    .btn-primary  { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ DATA WARNING BANNER ══════════════ -->
+<div class="data-warning-banner" role="alert">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <span><strong>Data handling reminder:</strong> Do not paste sensitive or regulated data into external AI providers unless approved by your organisation's policy.</span>
+</div>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header>
+  <div class="header-brand">
+    <div class="brand-icon">KQL</div>
+    <div class="brand-text">
+      <h1>KQL Hunt Gen</h1>
+      <p>Microsoft Sentinel &middot; Threat Hunting Assistant</p>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-label">Idle</span>
+  </div>
+</header>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<main>
+
+  <!-- Framework info strip -->
+  <div class="info-strip">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>
+      This tool is aligned to the <strong><a href="https://www.sei.cmu.edu/our-work/insider-threat/" target="_blank" rel="noopener">CMU CERT Insider Threat Framework</a></strong> and <strong>MITRE ATT&amp;CK</strong>.
+      Use it for insider threat incidents, external adversaries, or any suspicious behaviour — the prompt templates cover all patterns.
+      It runs fully <strong>client-side</strong>; no data is transmitted from this page.
+      When you copy a prompt into an external AI provider, standard data-handling policies apply.
+    </span>
+  </div>
+
+  <!-- ⓪ PDF Upload -->
+  <div class="card" id="pdf-card">
+    <div class="card-header">
+      <span class="card-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Import from PDF
+        <span class="tag" style="background:rgba(255,149,0,.1);color:var(--orange);border-color:rgba(255,149,0,.25);">Optional</span>
+      </span>
+      <span style="font-size:11px;color:var(--text-muted);">Incident report · Threat intel · Alert export</span>
+    </div>
+    <div class="card-body" id="pdf-card-body">
+
+      <!-- Drop zone (default state) -->
+      <div class="pdf-drop-zone" id="pdf-drop-zone"
+        ondragover="pdfDragOver(event)" ondragleave="pdfDragLeave(event)" ondrop="pdfDrop(event)">
+        <input type="file" accept=".pdf,application/pdf" onchange="pdfFileChosen(event)" id="pdf-file-input">
+        <div class="pdf-drop-icon">📄</div>
+        <div class="pdf-drop-title">Drop a PDF here, or click to browse</div>
+        <div class="pdf-drop-sub">Incident reports, threat intel, alert exports — IOCs and behaviors are extracted automatically</div>
+      </div>
+
+      <!-- Processing state (hidden) -->
+      <div class="pdf-processing" id="pdf-processing" style="display:none;">
+        <div class="pdf-spin"></div>
+        <span id="pdf-processing-msg">Extracting text from PDF…</span>
+      </div>
+
+      <!-- Summary (hidden until extraction) -->
+      <div class="pdf-summary" id="pdf-summary" style="display:none;">
+
+        <div class="pdf-file-row">
+          <span class="pdf-file-icon">📄</span>
+          <span class="pdf-file-name" id="pdf-fname"></span>
+          <span class="pdf-file-meta" id="pdf-fmeta"></span>
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="resetPDF()">✕ Remove</button>
+        </div>
+
+        <div id="pdf-warn-box"></div>
+
+        <div class="pdf-ioc-section" id="pdf-tactics-section">
+          <h4>Detected threat behaviors</h4>
+          <div class="ioc-chips" id="pdf-tactics"></div>
+        </div>
+
+        <div class="pdf-ioc-section" id="pdf-iocs-section">
+          <h4>Extracted IOCs</h4>
+          <div class="ioc-chips" id="pdf-iocs"></div>
+        </div>
+
+        <div>
+          <div class="pdf-desc-label">Auto-generated hunt description (populated below ↓)</div>
+          <div class="pdf-desc-preview" id="pdf-desc-preview"></div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-ghost" style="font-size:12px;" onclick="resetPDF()">Try a different file</button>
+          <button class="btn btn-primary" style="font-size:12px;" onclick="applyPDFToPrompt()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+            Apply to hunt input
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ① Hunt Input -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Describe Suspicious Behavior</span>
+      <span class="card-title" style="color:var(--text-muted);font-size:11px;">Plain English → KQL</span>
+    </div>
+    <div class="card-body" style="display:grid;gap:14px;">
+
+      <div class="prompt-wrap">
+        <textarea id="prompt"
+          placeholder="e.g. Detect PowerShell downloading a file from the internet and saving it to a temp directory, then immediately executing it..."
+          oninput="updateCharCount(this)"
+          onkeydown="handleKey(event)"></textarea>
+        <span class="char-count" id="char-count">0</span>
+      </div>
+
+      <div>
+        <p class="examples-label">Quick examples</p>
+        <div class="examples-strip" id="examples-strip"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="generate-bar">
+        <div class="hunt-meta">
+          <select class="meta-select" id="table-hint">
+            <option value="auto">Table: Auto-detect</option>
+            <option value="SecurityEvent">SecurityEvent</option>
+            <option value="DeviceProcessEvents">DeviceProcessEvents (MDE)</option>
+            <option value="DeviceNetworkEvents">DeviceNetworkEvents (MDE)</option>
+            <option value="DeviceFileEvents">DeviceFileEvents (MDE)</option>
+            <option value="DeviceRegistryEvents">DeviceRegistryEvents (MDE)</option>
+            <option value="SigninLogs">SigninLogs (AAD)</option>
+            <option value="AuditLogs">AuditLogs (AAD)</option>
+            <option value="OfficeActivity">OfficeActivity (M365)</option>
+            <option value="Syslog">Syslog (Linux)</option>
+            <option value="CommonSecurityLog">CommonSecurityLog (CEF)</option>
+            <option value="AzureActivity">AzureActivity</option>
+          </select>
+          <select class="meta-select" id="time-range">
+            <option value="1d">Last 1 day</option>
+            <option value="7d" selected>Last 7 days</option>
+            <option value="14d">Last 14 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+          </select>
+          <select class="meta-select" id="severity-hint">
+            <option value="auto">Severity: Auto</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+            <option value="Informational">Informational</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="generate-btn" onclick="buildPrompt()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Build Prompt
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ② Error -->
+  <div id="error-panel">
+    <div class="error-icon">⚠</div>
+    <div id="error-msg"></div>
+  </div>
+
+  <!-- ③ Generated Prompt (shown after Build Prompt) -->
+  <div class="card collapsible" id="prompt-card">
+    <div class="card-header">
+      <span class="card-title">
+        <span class="step-badge step-badge-blue">1</span>
+        Copy this prompt
+      </span>
+      <div class="ai-selector-wrap">
+        <button class="btn btn-copy" id="copy-prompt-btn" onclick="copyBuiltPrompt()">Copy</button>
+        <select class="ai-provider-select" id="ai-provider" onchange="updateAILink()">
+          <option value="https://claude.ai">Claude.ai</option>
+          <option value="https://chatgpt.com">ChatGPT</option>
+          <option value="https://gemini.google.com">Gemini</option>
+          <option value="https://copilot.microsoft.com">Copilot</option>
+          <option value="https://www.perplexity.ai">Perplexity</option>
+        </select>
+        <a class="btn btn-ai" id="open-ai-btn" href="https://claude.ai" target="_blank" rel="noopener">
+          Open AI ↗
+        </a>
+      </div>
+    </div>
+    <div class="card-body" style="display:grid;gap:12px;">
+      <div class="workflow-steps">
+        <div class="workflow-step">
+          <span class="step-badge step-badge-blue">1</span>
+          <span>Copy the prompt below, then open your <strong>AI assistant</strong> and paste it into a new conversation.</span>
+        </div>
+        <div class="workflow-step">
+          <span class="step-badge step-badge-blue">2</span>
+          <span>The AI will respond with a <strong>JSON block</strong>. Copy the entire response.</span>
+        </div>
+        <div class="workflow-step">
+          <span class="step-badge step-badge-green">3</span>
+          <span>Paste the AI's response into the <strong>Paste Response</strong> box below and click <strong>Render Results</strong>.</span>
+        </div>
+      </div>
+      <textarea class="built-prompt-ta" id="built-prompt" readonly spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <!-- ④ Paste Response (shown together with prompt card) -->
+  <div class="card collapsible" id="response-card">
+    <div class="card-header">
+      <span class="card-title">
+        <span class="step-badge step-badge-green">3</span>
+        Paste AI response
+      </span>
+      <span class="card-title"><span class="tag" style="background:rgba(168,85,247,.1);color:#c084fc;border-color:rgba(168,85,247,.25);">JSON</span></span>
+    </div>
+    <div class="card-body" style="display:grid;gap:12px;">
+      <textarea id="ai-response"
+        placeholder='Paste the full JSON response from your AI here…&#10;&#10;{&#10;  "query": "...",&#10;  "severity": "High",&#10;  "mitre": [...],&#10;  ...&#10;}'
+        spellcheck="false"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-ghost" onclick="clearResponse()">Clear</button>
+        <button class="btn btn-parse" onclick="parseResponse()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+          Render Results
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ Results -->
+  <div id="results">
+
+    <!-- KQL Query -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          KQL Query
+        </span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span id="cert-category-display" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;background:rgba(255,149,0,.12);color:var(--orange);border:1px solid rgba(255,149,0,.3);"></span>
+          <span id="severity-display" class="severity-badge"></span>
+          <button class="btn btn-copy" id="copy-kql-btn" onclick="copyKQL()">Copy</button>
+        </div>
+      </div>
+      <div class="kql-block">
+        <div class="kql-toolbar">
+          <span class="kql-lang-tag">KQL &bull; Microsoft Sentinel</span>
+          <span id="line-count" style="font-size:11px;color:var(--text-muted);font-family:var(--mono)"></span>
+        </div>
+        <pre id="kql-output"></pre>
+      </div>
+    </div>
+
+    <!-- MITRE ATT&CK -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          MITRE ATT&amp;CK Mapping
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="mitre-grid" id="mitre-grid"></div>
+      </div>
+    </div>
+
+    <!-- Explanation -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Hunt Analysis
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="explanation-body" id="explanation-body"></div>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Export Hunting Package</span>
+      </div>
+      <div class="card-body">
+        <div class="export-footer">
+          <span class="hunt-id" id="hunt-id"></span>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-ghost" onclick="copyMarkdown()">Copy Markdown</button>
+            <button class="btn btn-export" onclick="exportMarkdown()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download .md
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ══════════════ SCRIPT ══════════════ -->
+<script>
+'use strict';
+
+let currentResult = null;
+
+// Examples: { label, cat } where cat = 'insider' | 'exfil' | 'general'
+// Insider threat examples are aligned to the CMU CERT Insider Threat Framework
+// (IT sabotage, IP theft, fraud, espionage categories).
+// General examples cover external adversary and mixed-threat patterns.
+const EXAMPLES = [
+  // ── CMU CERT: Theft of Intellectual Property ───────────────────────────
+  { label: "Mass bulk download from SharePoint or OneDrive in the 30 days before a user's account termination or resignation", cat: "insider" },
+  { label: "User forwarding corporate email to a personal or external address via Outlook rules", cat: "insider" },
+  { label: "Large file upload to a personal cloud storage domain (Dropbox, Google Drive, iCloud) from a corporate device", cat: "insider" },
+  { label: "Sensitive file access by a user outside their normal department or job role scope", cat: "insider" },
+
+  // ── CMU CERT: IT Sabotage ──────────────────────────────────────────────
+  { label: "Mass deletion of files or SharePoint content by a single user shortly before or after account deactivation", cat: "insider" },
+  { label: "Privileged user disabling or modifying security controls, audit logging, or backup jobs", cat: "insider" },
+  { label: "Database records bulk deleted or truncated by a non-DBA account", cat: "insider" },
+
+  // ── CMU CERT: Fraud / Policy Violation ────────────────────────────────
+  { label: "After-hours access to HR, payroll, or financial systems by accounts that do not normally work outside business hours", cat: "insider" },
+  { label: "Account accessing data from two geographically impossible locations within a short time window (impossible travel)", cat: "insider" },
+  { label: "User accessing a terminated colleague's account or shared service account not assigned to them", cat: "insider" },
+
+  // ── CMU CERT: Exfiltration / Staging ──────────────────────────────────
+  { label: "Removable media or USB storage connected to an endpoint followed by large file copy activity", cat: "exfil" },
+  { label: "Data staged in a temp or user profile folder then immediately archived with 7-Zip, WinRAR, or similar tool", cat: "exfil" },
+  { label: "DNS exfiltration using unusually long subdomains or high-volume TXT record queries", cat: "exfil" },
+  { label: "Sensitive keyword search across SharePoint or OneDrive (e.g. 'password', 'confidential', 'salary', 'acquisition')", cat: "exfil" },
+
+  // ── General Threat Hunting ─────────────────────────────────────────────
+  { label: "PowerShell downloading and executing a file from the internet", cat: "general" },
+  { label: "Brute force login attempts against Azure AD accounts", cat: "general" },
+  { label: "Lateral movement via PsExec or WMI", cat: "general" },
+  { label: "Ransomware deleting shadow copies with vssadmin", cat: "general" },
+  { label: "Kerberoasting — SPN enumeration and TGS ticket requests", cat: "general" },
+  { label: "LSASS memory dumping via procdump or Task Manager", cat: "general" },
+  { label: "Pass-the-hash or pass-the-ticket authentication anomalies", cat: "general" },
+  { label: "Office macro spawning suspicious child processes", cat: "general" },
+];
+
+// ── Init ───────────────────────────────────────────────────────────────────
+(function init() {
+  const strip = document.getElementById('examples-strip');
+  const catLabel = { insider: 'Insider', exfil: 'Exfil', general: 'General' };
+  EXAMPLES.forEach(ex => {
+    const pill = document.createElement('button');
+    pill.className = 'example-pill';
+    pill.innerHTML = `<span class="examples-category cat-${ex.cat}">${catLabel[ex.cat]}</span>${ex.label}`;
+    pill.onclick = () => {
+      document.getElementById('prompt').value = ex.label;
+      updateCharCount(document.getElementById('prompt'));
+    };
+    strip.appendChild(pill);
+  });
+  updateCharCount(document.getElementById('prompt'));
+})();
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function setStatus(state, label) {
+  document.getElementById('status-dot').className = 'status-dot ' + state;
+  document.getElementById('status-label').textContent = label;
+}
+
+function updateCharCount(ta) {
+  document.getElementById('char-count').textContent = ta.value.length;
+}
+
+function handleKey(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') buildPrompt();
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-panel').classList.add('visible');
+  setStatus('error', 'Error');
+}
+
+function hideError() {
+  document.getElementById('error-panel').classList.remove('visible');
+}
+
+function clearResponse() {
+  document.getElementById('ai-response').value = '';
+  document.getElementById('ai-response').focus();
+}
+
+// ── AI provider link ───────────────────────────────────────────────────────
+function updateAILink() {
+  const sel = document.getElementById('ai-provider');
+  const btn = document.getElementById('open-ai-btn');
+  const labels = {
+    'https://claude.ai': 'Claude.ai',
+    'https://chatgpt.com': 'ChatGPT',
+    'https://gemini.google.com': 'Gemini',
+    'https://copilot.microsoft.com': 'Copilot',
+    'https://www.perplexity.ai': 'Perplexity',
+  };
+  btn.href = sel.value;
+  btn.textContent = 'Open ' + (labels[sel.value] || 'AI') + ' ↗';
+}
+
+// ── The prompt template sent to the AI ────────────────────────────────────
+const INSTRUCTIONS = `You are an expert Microsoft Sentinel threat hunter and KQL engineer with deep knowledge of MITRE ATT&CK and the CMU CERT Insider Threat Framework.
+
+This tool covers all threat types: insider threats (IP theft, IT sabotage, fraud, espionage as defined by CMU CERT), external adversary activity, and any suspicious behaviour an analyst needs to hunt for. Apply the appropriate framework to the behaviour described.
+
+Respond with a JSON object ONLY — no markdown fences, no prose outside the JSON. The JSON must have exactly this schema:
+
+{
+  "query": "<complete, production-ready KQL query>",
+  "severity": "High|Medium|Low|Informational",
+  "mitre": [
+    { "id": "T####.###", "name": "Technique Name", "tactic": "Tactic Name" }
+  ],
+  "certCategory": "<CMU CERT category if applicable: IP Theft | IT Sabotage | Fraud | Espionage | External | N/A>",
+  "what": "<1-2 sentence summary of what the query detects>",
+  "how": "<2-4 sentences explaining how the KQL logic works>",
+  "why": "<1-2 sentences on why this pattern indicates threat activity, referencing CERT or MITRE context where relevant>",
+  "falsePositives": ["<fp1>", "<fp2>", "<fp3>"],
+  "responseActions": ["<action1>", "<action2>", "<action3>"],
+  "huntingTips": ["<tip1>", "<tip2>"]
+}
+
+KQL quality rules:
+- Use the most appropriate Sentinel/MDE table(s)
+- For insider threat patterns prefer: AuditLogs, SigninLogs, OfficeActivity, CloudAppEvents, DeviceFileEvents, DeviceEvents (USB), AzureActivity
+- For endpoint/external adversary patterns prefer: DeviceProcessEvents, DeviceNetworkEvents, SecurityEvent
+- Always include a time filter with ago() using the timeRange value provided
+- Use let bindings to organize complex logic
+- Add // comments explaining non-obvious logic
+- Use summarize + extend for aggregations; project to select only needed columns
+- Handle case-insensitivity with =~ or tolower()
+- Where helpful, use join or union to correlate across tables (e.g. join SigninLogs with AuditLogs on user identity)
+- End with a project or project-rename to return clean, analyst-friendly columns
+- Make queries directly runnable in Log Analytics / Sentinel — no pseudo-code
+- Substitute the timeRange value into ago() (e.g. timeRange "7d" → ago(7d))
+- If a specific table is requested (tableHint), use it as the primary table`;
+
+function buildAIPrompt(userDescription, tableHint, timeRange, sevHint) {
+  const tableStr = tableHint === 'auto'
+    ? 'automatically choose the best table(s)'
+    : tableHint;
+  const sevStr = sevHint === 'auto'
+    ? 'determine from the threat severity'
+    : sevHint;
+
+  return `${INSTRUCTIONS}
+
+---
+
+Threat behavior to hunt: ${userDescription}
+
+Parameters:
+- timeRange: ${timeRange}
+- tableHint: ${tableStr}
+- severityOverride: ${sevStr}
+
+Respond with the JSON object only.`;
+}
+
+// ── Build Prompt ───────────────────────────────────────────────────────────
+function buildPrompt() {
+  hideError();
+
+  const description = document.getElementById('prompt').value.trim();
+  if (!description) {
+    showError('Please describe the suspicious behavior you want to hunt for.');
+    return;
+  }
+
+  const tableHint = document.getElementById('table-hint').value;
+  const timeRange = document.getElementById('time-range').value;
+  const sevHint   = document.getElementById('severity-hint').value;
+
+  const fullPrompt = buildAIPrompt(description, tableHint, timeRange, sevHint);
+
+  document.getElementById('built-prompt').value = fullPrompt;
+  document.getElementById('prompt-card').classList.add('visible');
+  document.getElementById('response-card').classList.add('visible');
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('ai-response').value = '';
+
+  setStatus('ready', 'Prompt ready');
+
+  // Store context for export later
+  currentResult = { prompt: description, timeRange, tableHint, result: null };
+
+  document.getElementById('prompt-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Copy built prompt ──────────────────────────────────────────────────────
+function copyBuiltPrompt() {
+  const ta = document.getElementById('built-prompt');
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = document.getElementById('copy-prompt-btn');
+    btn.textContent = 'Copied ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+// ── Parse Response ─────────────────────────────────────────────────────────
+function parseResponse() {
+  hideError();
+
+  const raw = document.getElementById('ai-response').value.trim();
+  if (!raw) {
+    showError('Paste the AI\'s JSON response into the box above first.');
+    return;
+  }
+
+  // Strip accidental markdown fences
+  const cleaned = raw.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  let result;
+  try {
+    result = JSON.parse(cleaned);
+  } catch {
+    // Try to extract a JSON object from surrounding prose
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) {
+      showError('Could not find valid JSON in the pasted text. Make sure you copied the AI\'s full response.');
+      return;
+    }
+    try {
+      result = JSON.parse(match[0]);
+    } catch {
+      showError('JSON parse failed. The response may be truncated — try regenerating in your AI assistant.');
+      return;
+    }
+  }
+
+  if (!result.query) {
+    showError('Parsed JSON is missing the "query" field. Make sure the AI followed the instructions.');
+    return;
+  }
+
+  if (currentResult) {
+    currentResult.result = result;
+  } else {
+    currentResult = { result, prompt: '', timeRange: '7d', tableHint: 'auto' };
+  }
+
+  renderResults(result);
+  setStatus('ready', 'Query ready');
+}
+
+// ── KQL Syntax Highlighter ─────────────────────────────────────────────────
+function highlightKQL(code) {
+  const keywords = [
+    'let','where','project','extend','summarize','by','on','join','union','parse',
+    'mv-expand','mv-apply','evaluate','render','sort','order','top','limit','count',
+    'distinct','range','datatable','search','find','print','ago','bin','now','between',
+    'in','not','and','or','true','false','has','has_any','has_all','contains',
+    'startswith','endswith','matches','regex','kind','inner','leftouter','fullouter',
+    'materialize','toscalar','dynamic','typeof','long','int','real','string','bool',
+    'datetime','timespan','guid','take','sample','invoke','columnchart','timechart',
+    'barchart','piechart','table','format_datetime','tostring','toint','tolong',
+    'todouble','tobool','todatetime','make_list','make_set','dcount','arg_max',
+    'arg_min','percentile','stdev','variance','iff','case','coalesce','isempty',
+    'isnotempty','isnull','isnotnull','split','strcat','substring','indexof',
+    'replace_string','replace_regex','trim','tolower','toupper','strlen','pack',
+    'bag_keys','bag_merge','array_length','set_union','set_intersect','set_difference',
+  ];
+
+  const tables = [
+    'SecurityEvent','DeviceProcessEvents','DeviceNetworkEvents','DeviceFileEvents',
+    'DeviceRegistryEvents','DeviceLogonEvents','DeviceImageLoadEvents',
+    'DeviceEvents','SigninLogs','AADNonInteractiveUserSignInLogs','AuditLogs',
+    'OfficeActivity','Syslog','CommonSecurityLog','AzureActivity','Alert',
+    'SecurityAlert','SecurityIncident','ThreatIntelligenceIndicator','Heartbeat',
+    'W3CIISLog','DnsEvents','WindowsFirewall','IdentityLogonEvents',
+    'IdentityQueryEvents','IdentityDirectoryEvents','EmailEvents','EmailAttachmentInfo',
+    'EmailUrlInfo','EmailPostDeliveryEvents','CloudAppEvents','BehaviorAnalytics',
+    'UserPeerAnalytics','AzureDiagnostics','StorageBlobLogs','KeyVaultData',
+  ];
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  return code.split('\n').map(line => {
+    const ci = line.indexOf('//');
+    let pre = line, comment = '';
+    if (ci >= 0) {
+      pre     = line.slice(0, ci);
+      comment = '<span class="cm">' + escHtml(line.slice(ci)) + '</span>';
+    }
+
+    pre = pre.replace(/"([^"]*)"/g, '<span class="str">"$1"</span>');
+    pre = pre.replace(/'([^']*)'/g, "<span class='str'>'$1'</span>");
+    pre = pre.replace(/\b(\d+(?:\.\d+)?[dhms]?)\b/g, (m, n) =>
+      /^\d/.test(n) ? '<span class="num">' + n + '</span>' : m
+    );
+    tables.forEach(t => {
+      const re = new RegExp('(?<![\\w\\-])(' + t + ')(?![\\w\\-])', 'g');
+      pre = pre.replace(re, '<span class="tb">$1</span>');
+    });
+    const kwRe = new RegExp('\\b(' + keywords.join('|') + ')\\b', 'g');
+    pre = pre.replace(kwRe, (m, k) => '<span class="kw">' + k + '</span>');
+    pre = pre.replace(/(\|)/g, '<span class="op">$1</span>');
+    pre = pre.replace(/\b([A-Z][a-zA-Z0-9_]+)(?=\s*==|\s*!=|\s*=~)/g, '<span class="var">$1</span>');
+
+    return pre + comment;
+  }).join('\n');
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderResults(r) {
+  // KQL
+  document.getElementById('kql-output').innerHTML = highlightKQL(r.query);
+  const lines = r.query.split('\n').length;
+  document.getElementById('line-count').textContent = `${lines} line${lines !== 1 ? 's' : ''}`;
+
+  // Severity + CERT category
+  const sevEl = document.getElementById('severity-display');
+  const sev = r.severity || 'Medium';
+  sevEl.textContent = sev;
+  sevEl.className = 'severity-badge sev-' + sev.toLowerCase();
+
+  const certEl = document.getElementById('cert-category-display');
+  if (certEl) {
+    const cert = r.certCategory && r.certCategory !== 'N/A' ? r.certCategory : null;
+    certEl.style.display = cert ? '' : 'none';
+    certEl.textContent = cert ? 'CERT: ' + cert : '';
+  }
+
+  // MITRE
+  const grid = document.getElementById('mitre-grid');
+  grid.innerHTML = '';
+  (r.mitre || []).forEach(t => {
+    grid.innerHTML += `
+      <div class="mitre-card">
+        <div class="mitre-id">${esc(t.id)}</div>
+        <div class="mitre-name">${esc(t.name)}</div>
+        <div class="mitre-tactic">${esc(t.tactic)}</div>
+      </div>`;
+  });
+
+  // Explanation
+  document.getElementById('explanation-body').innerHTML = `
+    ${section('What it detects', r.what)}
+    ${section('How the query works', r.how)}
+    ${section('Why this indicates threat activity', r.why)}
+    ${listSection('False positives to consider', r.falsePositives)}
+    ${listSection('Recommended response actions', r.responseActions)}
+    ${listSection('Hunting tips', r.huntingTips)}
+  `;
+
+  // Hunt ID
+  const id = 'HUNT-' + Date.now().toString(36).toUpperCase();
+  document.getElementById('hunt-id').textContent = id;
+  if (currentResult) {
+    currentResult.huntId = id;
+    currentResult.generatedAt = new Date().toISOString();
+  }
+
+  document.getElementById('results').classList.add('visible');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function section(title, body) {
+  if (!body) return '';
+  return `<div class="expl-section"><h3>${esc(title)}</h3><p>${esc(body)}</p></div>`;
+}
+
+function listSection(title, items) {
+  if (!items || !items.length) return '';
+  return `<div class="expl-section"><h3>${esc(title)}</h3><ul>
+    ${items.map(i => `<li>${esc(i)}</li>`).join('')}
+  </ul></div>`;
+}
+
+// ── Copy KQL ───────────────────────────────────────────────────────────────
+function copyKQL() {
+  if (!currentResult?.result?.query) return;
+  navigator.clipboard.writeText(currentResult.result.query).then(() => {
+    const btn = document.getElementById('copy-kql-btn');
+    btn.textContent = 'Copied ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+// ── Markdown export ────────────────────────────────────────────────────────
+function buildMarkdown() {
+  if (!currentResult?.result) return '';
+  const { result: r, prompt, huntId, generatedAt, timeRange } = currentResult;
+  const date       = generatedAt ? generatedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const mitreIds   = (r.mitre || []).map(t => t.id).join(', ');
+  const mitreFull  = (r.mitre || []).map(t => `| ${t.id} | ${t.name} | ${t.tactic} |`).join('\n');
+  const fpList     = (r.falsePositives  || []).map(i => `- ${i}`).join('\n');
+  const actionList = (r.responseActions || []).map(i => `- ${i}`).join('\n');
+  const tipList    = (r.huntingTips     || []).map(i => `- ${i}`).join('\n');
+
+  const certLine = r.certCategory && r.certCategory !== 'N/A' ? `\n**CERT Category:** ${r.certCategory}` : '';
+
+  return `# Hunting Package — ${huntId || 'HUNT'}
+**Date:** ${date}
+**Time Range:** ${timeRange || '7d'}
+**Severity:** ${r.severity || 'Medium'}
+**MITRE:** ${mitreIds}${certLine}
+
+---
+
+## Hunt Description
+
+${prompt || ''}
+
+---
+
+## KQL Query
+
+\`\`\`kql
+${r.query}
+\`\`\`
+
+---
+
+## MITRE ATT&CK Techniques
+
+| ID | Technique | Tactic |
+|----|-----------|--------|
+${mitreFull}
+
+---
+
+## Analysis
+
+### What it detects
+${r.what || ''}
+
+### How the query works
+${r.how || ''}
+
+### Why this indicates threat activity
+${r.why || ''}
+
+---
+
+## False Positives
+
+${fpList}
+
+---
+
+## Response Actions
+
+${actionList}
+
+---
+
+## Hunting Tips
+
+${tipList}
+
+---
+
+*Generated by KQL Hunt Gen*
+`;
+}
+
+function copyMarkdown() {
+  const md = buildMarkdown();
+  if (!md) return;
+  navigator.clipboard.writeText(md).then(() => {
+    const btn = event.currentTarget;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied ✓';
+    setTimeout(() => btn.textContent = orig, 1800);
+  });
+}
+
+function exportMarkdown() {
+  const md = buildMarkdown();
+  if (!md) return;
+  const name = (currentResult?.huntId || 'hunt') + '.md';
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PDF IMPORT
+// ══════════════════════════════════════════════════════════════════════════════
+
+let pdfAnalysis = null;
+
+// ── Drag-and-drop handlers ─────────────────────────────────────────────────
+function pdfDragOver(e) {
+  e.preventDefault();
+  document.getElementById('pdf-drop-zone').classList.add('dragover');
+}
+
+function pdfDragLeave(e) {
+  document.getElementById('pdf-drop-zone').classList.remove('dragover');
+}
+
+function pdfDrop(e) {
+  e.preventDefault();
+  document.getElementById('pdf-drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))) {
+    processPDF(file);
+  } else {
+    showPDFWarn('Only PDF files are supported. Drop a .pdf file.');
+  }
+}
+
+function pdfFileChosen(e) {
+  const file = e.target.files[0];
+  if (file) processPDF(file);
+}
+
+// ── Main processing pipeline ───────────────────────────────────────────────
+function processPDF(file) {
+  showPDFProcessing('Extracting text from PDF…');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    setPDFProcessingMsg('Identifying IOCs and threat behaviors…');
+    const text = extractPDFText(e.target.result);
+    const analysis = analyzePDFText(text, file);
+    pdfAnalysis = analysis;
+
+    setTimeout(() => {
+      renderPDFSummary(analysis, file);
+    }, 300); // brief pause so "Identifying…" is readable
+  };
+  reader.onerror = function() {
+    showPDFWarn('Could not read the file. Make sure it is a valid PDF.');
+    resetPDFUI();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showPDFProcessing(msg) {
+  document.getElementById('pdf-drop-zone').style.display  = 'none';
+  document.getElementById('pdf-processing').style.display = 'flex';
+  document.getElementById('pdf-summary').style.display    = 'none';
+  document.getElementById('pdf-processing-msg').textContent = msg;
+}
+
+function setPDFProcessingMsg(msg) {
+  document.getElementById('pdf-processing-msg').textContent = msg;
+}
+
+function resetPDFUI() {
+  document.getElementById('pdf-drop-zone').style.display  = '';
+  document.getElementById('pdf-processing').style.display = 'none';
+  document.getElementById('pdf-summary').style.display    = 'none';
+  document.getElementById('pdf-file-input').value = '';
+  pdfAnalysis = null;
+}
+
+function resetPDF() {
+  resetPDFUI();
+}
+
+// ── PDF Text Extraction (no external libraries) ────────────────────────────
+function extractPDFText(buffer) {
+  // Convert buffer to a latin-1 string for regex processing
+  const bytes = new Uint8Array(buffer);
+  const chars = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) chars[i] = String.fromCharCode(bytes[i]);
+  const raw = chars.join('');
+
+  const chunks = [];
+
+  // ① BT…ET text objects (standard text rendering)
+  const btEt = /BT\b([\s\S]*?)\bET\b/g;
+  let m;
+  while ((m = btEt.exec(raw)) !== null) {
+    const block = m[1];
+
+    // (text) Tj  — single string operator
+    const tj = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g;
+    let t;
+    while ((t = tj.exec(block)) !== null) {
+      chunks.push(decodePDFStr(t[1]));
+    }
+
+    // [(str) kern (str) …] TJ  — array text operator
+    const tjArr = /\[([\s\S]*?)\]\s*TJ/g;
+    let ta;
+    while ((ta = tjArr.exec(block)) !== null) {
+      const inner = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+      let im;
+      while ((im = inner.exec(ta[1])) !== null) {
+        chunks.push(decodePDFStr(im[1]));
+      }
+    }
+  }
+
+  // ② Fallback: scan for readable ASCII runs outside binary sections
+  // Useful for some linearized or non-standard PDFs
+  if (chunks.join('').replace(/\s/g, '').length < 100) {
+    const ascii = raw.match(/[ -~\t\n\r]{8,}/g) || [];
+    ascii.forEach(run => {
+      // Skip runs that look like PDF syntax rather than content
+      if (!/^(obj|endobj|stream|xref|trailer|startxref|BT|ET)$/.test(run.trim())) {
+        chunks.push(run);
+      }
+    });
+  }
+
+  return chunks.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function decodePDFStr(s) {
+  return s
+    .replace(/\\n/g, ' ')
+    .replace(/\\r/g, ' ')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\\(/g, '(')
+    .replace(/\\\)/g, ')')
+    .replace(/\\(\d{3})/g, (_, oct) => {
+      const code = parseInt(oct, 8);
+      return code >= 32 && code < 127 ? String.fromCharCode(code) : ' ';
+    });
+}
+
+// ── IOC & Behavior Extraction ──────────────────────────────────────────────
+function analyzePDFText(text, file) {
+  const t = text;
+
+  // IOC regexes
+  const ipRe      = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g;
+  const urlRe     = /https?:\/\/[^\s<>"',;)]{6,}/g;
+  const domainRe  = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+(?:com|net|org|io|gov|mil|edu|ru|cn|xyz|top|info|biz|co|onion|zip|app|dev)\b/g;
+  const md5Re     = /\b[0-9a-fA-F]{32}\b/g;
+  const sha1Re    = /\b[0-9a-fA-F]{40}\b/g;
+  const sha256Re  = /\b[0-9a-fA-F]{64}\b/g;
+  const cveRe     = /CVE-\d{4}-\d{4,}/gi;
+  const winPathRe = /[A-Za-z]:\\(?:[^\s<>"'|?*\r\n\\/:]{1,255}\\)*[^\s<>"'|?*\r\n\\/:]{0,255}/g;
+  const regKeyRe  = /HKEY_(?:LOCAL_MACHINE|CURRENT_USER|CLASSES_ROOT|USERS|CURRENT_CONFIG)(?:\\[^\s<>"]{1,120})*/gi;
+
+  function uniq(arr) { return [...new Set((arr || []).slice(0, 20))]; }
+
+  const ips      = uniq(t.match(ipRe)).filter(ip => !ip.startsWith('0.') && ip !== '0.0.0.0' && ip !== '255.255.255.255');
+  const urls     = uniq(t.match(urlRe));
+  const domains  = uniq(t.match(domainRe)).filter(d =>
+    !urls.some(u => u.includes(d)) &&
+    !/^(?:\d+\.)+\d+$/.test(d)
+  ).slice(0, 10);
+  const hashes   = uniq([...t.match(sha256Re)||[], ...t.match(sha1Re)||[], ...t.match(md5Re)||[]]);
+  const cves     = uniq(t.match(cveRe));
+  const paths    = uniq(t.match(winPathRe)).slice(0, 8);
+  const regKeys  = uniq(t.match(regKeyRe)).slice(0, 4);
+
+  // Tactic / behavior keyword matching
+  const TACTICS = [
+    { label: 'Phishing / Initial Access',   re: /phish|spearphish|malicious\s+(?:link|email|attachment)|drive.by\s+download|watering\s+hole/i },
+    { label: 'PowerShell Execution',         re: /powershell|invoke.expression|iex\s*\(|encoded\s+command|base64.*command/i },
+    { label: 'Script / Macro Execution',     re: /macro|vba\s+script|wscript|cscript|mshta|regsvr32|rundll32|wmic/i },
+    { label: 'Credential Dumping',           re: /credential\s+dump|lsass|mimikatz|ntds\.dit|secretsdump|password\s+hash/i },
+    { label: 'Privilege Escalation',         re: /privilege\s+escal|uac\s+bypass|token\s+impersonat|sudo|setuid|suid\s+bit/i },
+    { label: 'Persistence',                  re: /scheduled\s+task|registry\s+run\s+key|autorun|startup\s+folder|cron\s+job|service\s+install/i },
+    { label: 'Defense Evasion',              re: /obfuscat|base64\s+encod|packed\s+binary|log\s+(?:clear|tamper|delet)|timestomp|disable.*(?:av|antivirus|defender)/i },
+    { label: 'Lateral Movement',             re: /lateral\s+movement|psexec|wmi\s+(?:exec|lateral)|pass.the.(?:hash|ticket)|remote\s+exec|smb\s+spread/i },
+    { label: 'Reconnaissance / Discovery',   re: /network\s+scan|port\s+scan|ldap\s+quer|ad\s+enum|bloodhound|net\.exe|whoami|ipconfig|systeminfo/i },
+    { label: 'Data Collection / Staging',    re: /data\s+(?:staging|collection|aggregat)|bulk\s+(?:copy|download)|archive\s+(?:collect|creat)|file\s+staging/i },
+    { label: 'Exfiltration',                 re: /exfiltrat|data\s+theft|upload.*(?:dropbox|googledrive|onedrive|mega|wetransfer)|dns\s+tunnel|ftp\s+upload/i },
+    { label: 'Ransomware / Encryption',      re: /ransomware|encrypt\s+file|ransom\s+note|vssadmin\s+delete|shadow\s+cop/i },
+    { label: 'C2 / Command & Control',       re: /command.and.control|c2\s+server|beaconing|cobalt\s+strike|empire|metasploit|reverse\s+shell/i },
+    { label: 'Data Destruction / Wiper',     re: /wiper|data\s+destruct|zero\s+out\s+disk|disk\s+wipe|overwrite.*(?:file|sector)/i },
+    { label: 'Web Shell',                    re: /web\s*shell|aspx?\s+shell|php\s+shell|china\s*chopper|upload.*\.(asp|php|jsp)/i },
+    { label: 'Supply Chain Attack',          re: /supply\s+chain|build\s+pipeline|software\s+update.*(?:tamper|compromise)|solarwinds|3cx/i },
+  ];
+
+  const detectedTactics = TACTICS.filter(t2 => t2.re.test(text)).map(t2 => t2.label);
+
+  // Severity guess
+  let severity = 'Medium';
+  const highSigs = /ransomware|credential\s+dump|mimikatz|wiper|lateral\s+movement|c2\s+server|cobalt\s+strike|exfiltrat/i;
+  const lowSigs  = /phishing\s+awareness|training|false\s+positive|test\s+environment/i;
+  if (highSigs.test(text)) severity = 'High';
+  else if (lowSigs.test(text)) severity = 'Low';
+
+  // Synthesize plain-English description
+  const description = buildPDFDescription({ detectedTactics, ips, domains, hashes, cves, paths, regKeys, urls, severity, fileName: file.name });
+
+  const charCount = text.replace(/\s/g, '').length;
+  const extractionQuality = charCount > 2000 ? 'good' : charCount > 400 ? 'partial' : 'poor';
+
+  return { ips, domains, hashes, cves, paths, regKeys, urls, detectedTactics, description, severity, extractionQuality, charCount };
+}
+
+function buildPDFDescription({ detectedTactics, ips, domains, hashes, cves, paths, severity }) {
+  const parts = [];
+
+  if (detectedTactics.length > 0) {
+    parts.push(`The document describes threat activity involving: ${detectedTactics.slice(0, 5).join(', ')}.`);
+  }
+
+  if (ips.length > 0) {
+    const sample = ips.slice(0, 4).join(', ');
+    parts.push(`Suspicious IP addresses observed: ${sample}${ips.length > 4 ? `, and ${ips.length - 4} more` : ''}.`);
+  }
+
+  if (domains.length > 0) {
+    const sample = domains.slice(0, 3).join(', ');
+    parts.push(`Associated domains include: ${sample}${domains.length > 3 ? ', and others' : ''}.`);
+  }
+
+  if (hashes.length > 0) {
+    parts.push(`${hashes.length} file hash${hashes.length > 1 ? 'es' : ''} referenced (${hashes[0].length === 64 ? 'SHA-256' : hashes[0].length === 40 ? 'SHA-1' : 'MD5'}).`);
+  }
+
+  if (cves.length > 0) {
+    parts.push(`Exploited CVEs: ${cves.slice(0, 4).join(', ')}.`);
+  }
+
+  if (paths.length > 0) {
+    parts.push(`File paths of interest: ${paths.slice(0, 2).join(', ')}.`);
+  }
+
+  if (parts.length === 0) {
+    parts.push('Hunt for suspicious activity described in the uploaded incident report.');
+  }
+
+  parts.push('Generate a KQL hunting query that detects this behavior pattern in Microsoft Sentinel or Defender Advanced Hunting.');
+
+  return parts.join(' ');
+}
+
+// ── Render extraction results ──────────────────────────────────────────────
+function renderPDFSummary(a, file) {
+  document.getElementById('pdf-processing').style.display = 'none';
+  document.getElementById('pdf-summary').style.display    = 'grid';
+
+  // File info
+  document.getElementById('pdf-fname').textContent = file.name;
+  document.getElementById('pdf-fmeta').textContent =
+    (file.size / 1024).toFixed(0) + ' KB · ' + (a.charCount > 0 ? a.charCount.toLocaleString() + ' chars extracted' : 'no text extracted');
+
+  // Quality warning
+  const warnBox = document.getElementById('pdf-warn-box');
+  if (a.extractionQuality === 'poor') {
+    warnBox.innerHTML = `<div class="pdf-warn">⚠ Very little text could be extracted — the PDF may be scanned (image-based) or encrypted. You can still edit the description below manually, or copy-paste the document text directly into the hunt input.</div>`;
+  } else if (a.extractionQuality === 'partial') {
+    warnBox.innerHTML = `<div class="pdf-warn">⚠ Partial text extracted. Review the auto-generated description and add any context that may be missing before generating.</div>`;
+  } else {
+    warnBox.innerHTML = '';
+  }
+
+  // Tactics
+  const tacticsEl = document.getElementById('pdf-tactics');
+  if (a.detectedTactics.length > 0) {
+    tacticsEl.innerHTML = a.detectedTactics
+      .map(t2 => `<span class="ioc-chip ioc-tactic">${esc(t2)}</span>`).join('');
+  } else {
+    tacticsEl.innerHTML = '<span class="ioc-none">No specific tactics identified — review the description below</span>';
+  }
+
+  // IOCs
+  const iocsEl = document.getElementById('pdf-iocs');
+  const chips = [];
+  a.ips.slice(0, 8).forEach(v => chips.push(`<span class="ioc-chip ioc-ip" title="IP">${esc(v)}</span>`));
+  a.domains.slice(0, 6).forEach(v => chips.push(`<span class="ioc-chip ioc-domain" title="Domain">${esc(v)}</span>`));
+  a.hashes.slice(0, 4).forEach(v => chips.push(`<span class="ioc-chip ioc-hash" title="Hash">${esc(v.slice(0,16))}…</span>`));
+  a.cves.slice(0, 6).forEach(v => chips.push(`<span class="ioc-chip ioc-cve" title="CVE">${esc(v)}</span>`));
+  a.paths.slice(0, 4).forEach(v => chips.push(`<span class="ioc-chip ioc-path" title="Path">${esc(v)}</span>`));
+
+  if (chips.length > 0) {
+    iocsEl.innerHTML = chips.join('');
+  } else {
+    iocsEl.innerHTML = '<span class="ioc-none">No IOCs extracted</span>';
+  }
+
+  // Description preview
+  document.getElementById('pdf-desc-preview').textContent = a.description;
+}
+
+// ── Apply to hunt input ────────────────────────────────────────────────────
+function applyPDFToPrompt() {
+  if (!pdfAnalysis) return;
+
+  const ta = document.getElementById('prompt');
+  ta.value = pdfAnalysis.description;
+  updateCharCount(ta);
+
+  // Auto-select severity if detected
+  if (pdfAnalysis.severity !== 'Medium') {
+    const sevSelect = document.getElementById('severity-hint');
+    sevSelect.value = pdfAnalysis.severity;
+  }
+
+  // Scroll to hunt input
+  document.querySelector('.card:nth-child(2)').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Flash the textarea briefly to show it was populated
+  ta.style.borderColor = 'var(--green)';
+  ta.style.boxShadow   = '0 0 0 2px rgba(0,255,136,.12)';
+  setTimeout(() => {
+    ta.style.borderColor = '';
+    ta.style.boxShadow   = '';
+  }, 1200);
+}
+
+function showPDFWarn(msg) {
+  resetPDFUI();
+  // Briefly show the drop zone with an error tint
+  const zone = document.getElementById('pdf-drop-zone');
+  zone.style.borderColor = 'var(--red)';
+  zone.querySelector('.pdf-drop-title').textContent = msg;
+  setTimeout(() => {
+    zone.style.borderColor = '';
+    zone.querySelector('.pdf-drop-title').textContent = 'Drop a PDF here, or click to browse';
+  }, 3000);
+}
+</script>
+</body>
+</html>
