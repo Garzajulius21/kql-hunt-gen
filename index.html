@@ -685,6 +685,17 @@
     display: flex; justify-content: flex-end; padding: 8px 10px 2px;
     border-top: 1px solid var(--border);
   }
+  .btn-rename {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 12px; cursor: pointer; padding: 2px 6px;
+    border-radius: 3px; transition: color .15s; flex-shrink: 0; line-height: 1;
+  }
+  .btn-rename:hover { color: var(--cyan); }
+  .rename-input {
+    background: var(--bg-input); border: 1px solid var(--cyan-dim);
+    border-radius: 4px; color: var(--text); font-size: 12px;
+    padding: 3px 8px; outline: none; width: 100%;
+  }
 </style>
 </head>
 <body>
@@ -2305,13 +2316,14 @@ function renderSaved() {
   }
 
   body.innerHTML = entries.map(e => {
-    const sev  = (e.severity || 'medium').toLowerCase();
+    const sev   = (e.severity || 'medium').toLowerCase();
     const table = e.tableHint === 'auto' ? 'Auto table' : e.tableHint;
     const date  = e.savedAt ? new Date(e.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    const label = e.label || e.description;
     return `
-      <div class="history-item" onclick="reloadSaved('${esc(e.huntId)}')">
+      <div class="history-item" id="saved-item-${esc(e.huntId)}" onclick="reloadSaved('${esc(e.huntId)}')">
         <div class="history-item-main">
-          <div class="history-item-desc" title="${esc(e.description)}">${esc(e.description)}</div>
+          <div class="history-item-desc" id="saved-label-${esc(e.huntId)}" title="${esc(e.description)}">${esc(label)}</div>
           <div class="history-item-meta">
             <span class="history-sev history-sev-${sev}">${esc(e.severity || 'Medium')}</span>
             <span class="history-meta-tag">${esc(table)}</span>
@@ -2319,7 +2331,10 @@ function renderSaved() {
             ${date ? `<span class="history-meta-tag">Saved ${date}</span>` : ''}
           </div>
         </div>
-        <button class="history-item-del" onclick="deleteSaved('${esc(e.huntId)}', event)" title="Remove from library">✕</button>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn-rename" onclick="startRename('${esc(e.huntId)}', event)" title="Rename">✏</button>
+          <button class="history-item-del" onclick="deleteSaved('${esc(e.huntId)}', event)" title="Remove from library">✕</button>
+        </div>
       </div>`;
   }).join('');
 }
@@ -2379,6 +2394,50 @@ ${mitreFull}
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function startRename(huntId, e) {
+  e.stopPropagation();
+  const entries = loadSaved();
+  const entry   = entries.find(e2 => e2.huntId === huntId);
+  if (!entry) return;
+
+  const labelEl = document.getElementById(`saved-label-${huntId}`);
+  const itemEl  = document.getElementById(`saved-item-${huntId}`);
+  if (!labelEl) return;
+
+  const current = entry.label || entry.description;
+
+  // Replace label with input
+  labelEl.outerHTML = `<input class="rename-input" id="rename-input-${huntId}"
+    value="${esc(current)}"
+    onclick="event.stopPropagation()"
+    onkeydown="handleRenameKey(event, '${huntId}')"
+    onblur="commitRename('${huntId}')">`;
+
+  // Disable row click while editing
+  itemEl.onclick = null;
+
+  const input = document.getElementById(`rename-input-${huntId}`);
+  if (input) { input.focus(); input.select(); }
+}
+
+function handleRenameKey(e, huntId) {
+  if (e.key === 'Enter')  { e.preventDefault(); commitRename(huntId); }
+  if (e.key === 'Escape') { renderSaved(); } // cancel
+}
+
+function commitRename(huntId) {
+  const input = document.getElementById(`rename-input-${huntId}`);
+  if (!input) return;
+  const newLabel = input.value.trim();
+  const entries  = loadSaved();
+  const entry    = entries.find(e => e.huntId === huntId);
+  if (entry) {
+    entry.label = newLabel || entry.description;
+    saveSaved(entries);
+  }
+  renderSaved();
 }
 
 // ── Update star button when results render ─────────────────────────────────
