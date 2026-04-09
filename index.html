@@ -647,6 +647,44 @@
   }
   .history-item-del:hover { color: var(--red); }
   .history-empty { font-size: 12px; color: var(--text-muted); padding: 12px; text-align: center; }
+
+  /* ── Star / Save button ── */
+  .btn-star {
+    background: none; border: 1px solid var(--border);
+    border-radius: 5px; padding: 5px 10px; cursor: pointer;
+    color: var(--text-muted); font-size: 13px; line-height: 1;
+    transition: all .15s; white-space: nowrap;
+  }
+  .btn-star:hover { border-color: #f5a623; color: #f5a623; background: rgba(245,166,35,.08); }
+  .btn-star.starred { border-color: #f5a623; color: #f5a623; background: rgba(245,166,35,.1); }
+
+  /* ── Saved library ── */
+  .saved-section {
+    background: var(--bg-card); border: 1px solid rgba(245,166,35,.25);
+    border-radius: 10px; overflow: hidden;
+  }
+  .saved-header {
+    padding: 12px 18px; border-bottom: 1px solid rgba(245,166,35,.15);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(245,166,35,.04); cursor: pointer; user-select: none;
+  }
+  .saved-header:hover { background: rgba(245,166,35,.08); }
+  .saved-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .1em; color: #f5a623;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .saved-count {
+    background: rgba(245,166,35,.15); color: #f5a623;
+    border: 1px solid rgba(245,166,35,.3);
+    border-radius: 10px; padding: 1px 7px; font-size: 10px;
+  }
+  .saved-body { display: none; padding: 10px; }
+  .saved-body.open { display: grid; gap: 6px; }
+  .saved-actions-bar {
+    display: flex; justify-content: flex-end; padding: 8px 10px 2px;
+    border-top: 1px solid var(--border);
+  }
 </style>
 </head>
 <body>
@@ -987,7 +1025,8 @@
       <div class="card-body">
         <div class="export-footer">
           <span class="hunt-id" id="hunt-id"></span>
-          <div style="display:flex;gap:10px;">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button class="btn-star" id="star-btn" onclick="toggleStar()" title="Save to library">☆ Save</button>
             <button class="btn btn-ghost" onclick="copyMarkdown()">Copy Markdown</button>
             <button class="btn btn-export" onclick="exportMarkdown()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1000,7 +1039,25 @@
 
   </div>
 
-  <!-- ⑥ Query History -->
+  <!-- ⑥ Saved Library -->
+  <div class="saved-section" id="saved-section" style="display:none;">
+    <div class="saved-header" onclick="toggleSaved()">
+      <span class="saved-title">
+        ★ Saved Query Library
+        <span class="saved-count" id="saved-count">0</span>
+      </span>
+      <span class="history-chevron" id="saved-chevron">▼</span>
+    </div>
+    <div class="saved-body" id="saved-body"></div>
+    <div class="saved-actions-bar" id="saved-actions-bar" style="display:none;">
+      <button class="btn btn-ghost" style="font-size:11px;" onclick="exportSavedLibrary()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export library as .md
+      </button>
+    </div>
+  </div>
+
+  <!-- ⑦ Query History -->
   <div class="history-section" id="history-section" style="display:none;">
     <div class="history-header" onclick="toggleHistory()">
       <span class="history-title">
@@ -2161,6 +2218,178 @@ renderResults = function(r) {
 
 // ── Init history on load ───────────────────────────────────────────────────
 renderHistory();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SAVED QUERY LIBRARY
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SAVED_KEY = 'kql_saved_library';
+
+function loadSaved() {
+  try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveSaved(entries) {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(entries)); } catch {}
+}
+
+function isCurrentSaved() {
+  if (!currentResult?.huntId) return false;
+  return loadSaved().some(e => e.huntId === currentResult.huntId);
+}
+
+function toggleStar() {
+  if (!currentResult?.result) return;
+  const entries = loadSaved();
+  const idx = entries.findIndex(e => e.huntId === currentResult.huntId);
+  if (idx >= 0) {
+    entries.splice(idx, 1);
+  } else {
+    entries.unshift({
+      huntId:      currentResult.huntId,
+      description: currentResult.prompt || '',
+      tableHint:   currentResult.tableHint || 'auto',
+      timeRange:   currentResult.timeRange || '7d',
+      severity:    currentResult.result.severity || 'Medium',
+      result:      currentResult.result,
+      savedAt:     new Date().toISOString()
+    });
+  }
+  saveSaved(entries);
+  updateStarButton();
+  renderSaved();
+}
+
+function updateStarButton() {
+  const btn = document.getElementById('star-btn');
+  if (!btn) return;
+  if (isCurrentSaved()) {
+    btn.textContent = '★ Saved';
+    btn.classList.add('starred');
+  } else {
+    btn.textContent = '☆ Save';
+    btn.classList.remove('starred');
+  }
+}
+
+function toggleSaved() {
+  const body    = document.getElementById('saved-body');
+  const chevron = document.getElementById('saved-chevron');
+  const open    = body.classList.toggle('open');
+  chevron.classList.toggle('open', open);
+}
+
+function deleteSaved(huntId, e) {
+  e.stopPropagation();
+  const entries = loadSaved().filter(e2 => e2.huntId !== huntId);
+  saveSaved(entries);
+  renderSaved();
+  updateStarButton();
+}
+
+function renderSaved() {
+  const entries = loadSaved();
+  const section  = document.getElementById('saved-section');
+  const body     = document.getElementById('saved-body');
+  const count    = document.getElementById('saved-count');
+  const actBar   = document.getElementById('saved-actions-bar');
+
+  count.textContent = entries.length;
+  section.style.display  = entries.length > 0 ? '' : 'none';
+  actBar.style.display   = entries.length > 0 ? '' : 'none';
+
+  if (entries.length === 0) {
+    body.innerHTML = '<div class="history-empty">No saved queries yet — click ☆ Save on any result</div>';
+    return;
+  }
+
+  body.innerHTML = entries.map(e => {
+    const sev  = (e.severity || 'medium').toLowerCase();
+    const table = e.tableHint === 'auto' ? 'Auto table' : e.tableHint;
+    const date  = e.savedAt ? new Date(e.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    return `
+      <div class="history-item" onclick="reloadSaved('${esc(e.huntId)}')">
+        <div class="history-item-main">
+          <div class="history-item-desc" title="${esc(e.description)}">${esc(e.description)}</div>
+          <div class="history-item-meta">
+            <span class="history-sev history-sev-${sev}">${esc(e.severity || 'Medium')}</span>
+            <span class="history-meta-tag">${esc(table)}</span>
+            <span class="history-meta-tag">${esc(e.timeRange || '7d')}</span>
+            ${date ? `<span class="history-meta-tag">Saved ${date}</span>` : ''}
+          </div>
+        </div>
+        <button class="history-item-del" onclick="deleteSaved('${esc(e.huntId)}', event)" title="Remove from library">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function reloadSaved(huntId) {
+  const entry = loadSaved().find(e => e.huntId === huntId);
+  if (!entry) return;
+  document.getElementById('prompt').value = entry.description;
+  updateCharCount(document.getElementById('prompt'));
+  if (entry.tableHint) document.getElementById('table-hint').value = entry.tableHint;
+  if (entry.timeRange) document.getElementById('time-range').value = entry.timeRange;
+  if (entry.severity)  document.getElementById('severity-hint').value = entry.severity;
+  currentResult = {
+    prompt: entry.description, timeRange: entry.timeRange,
+    tableHint: entry.tableHint, result: entry.result,
+    huntId: entry.huntId, generatedAt: entry.savedAt
+  };
+  renderResults(entry.result);
+  updateStarButton();
+  setStatus('ready', 'Query ready');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function exportSavedLibrary() {
+  const entries = loadSaved();
+  if (!entries.length) return;
+  const md = entries.map(e => {
+    const r = e.result;
+    const mitreFull = (r.mitre || []).map(t => `| ${t.id} | ${t.name} | ${t.tactic} |`).join('\n');
+    return `# ${e.huntId || 'Hunt'}
+**Saved:** ${e.savedAt ? e.savedAt.slice(0,10) : ''}
+**Severity:** ${r.severity || 'Medium'}
+**Table:** ${e.tableHint || 'auto'}
+**Time Range:** ${e.timeRange || '7d'}
+
+## Description
+${e.description}
+
+## KQL Query
+\`\`\`kql
+${r.query}
+\`\`\`
+
+## MITRE ATT&CK
+| ID | Technique | Tactic |
+|----|-----------|--------|
+${mitreFull}
+
+---
+`;
+  }).join('\n');
+
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'kql-saved-library.md';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Update star button when results render ─────────────────────────────────
+const _origRenderResults2 = renderResults;
+renderResults = function(r) {
+  _origRenderResults2(r);
+  setTimeout(updateStarButton, 0);
+};
+
+// ── Init saved on load ─────────────────────────────────────────────────────
+renderSaved();
 </script>
 </body>
 </html>
