@@ -1,8 +1,8 @@
-# KQL Hunt Gen
-### AI-Assisted Threat Hunting Query Generator for Microsoft Sentinel
+# SPECTER — Sentinel Threat Hunting Query Generator
 
 ![Platform](https://img.shields.io/badge/Platform-Web%20%28Client--Side%29-blue)
 ![Framework](https://img.shields.io/badge/Framework-MITRE%20ATT%26CK%20%2B%20CMU%20CERT-red)
+![AI](https://img.shields.io/badge/AI-Groq%20%7C%20Anthropic%20%7C%20Gemini-green)
 ![Dependencies](https://img.shields.io/badge/Dependencies-None-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -10,119 +10,62 @@
 
 ## Overview
 
-KQL Hunt Gen is a zero-dependency, fully client-side web application that helps SOC analysts and threat hunters generate production-ready KQL (Kusto Query Language) queries for Microsoft Sentinel without needing to know KQL syntax. An analyst describes suspicious behavior in plain English, the tool builds a structured AI prompt, and the resulting KQL query — along with its MITRE ATT&CK mapping, false positive guidance, and response actions — is rendered directly in the browser.
+SPECTER is a zero-dependency, fully client-side web application that helps SOC analysts and threat hunters generate production-ready KQL (Kusto Query Language) queries for Microsoft Sentinel without needing to know KQL syntax. Describe suspicious behavior in plain English, and SPECTER generates the query, MITRE ATT&CK mapping, false positive guidance, and response actions — directly in your browser.
 
-The tool is aligned to two industry-standard frameworks:
+Aligned to two industry-standard frameworks:
+- **MITRE ATT&CK Enterprise** — external adversary tactics, techniques, and procedures
+- **CMU CERT Insider Threat Framework** — IP theft, IT sabotage, fraud, and espionage categories
 
-- **MITRE ATT&CK Enterprise** — for external adversary tactics, techniques, and procedures
-- **CMU CERT Insider Threat Framework** — covering IP theft, IT sabotage, fraud, and espionage categories
-
-Everything runs in the browser. No server, no backend, no API keys stored anywhere. The only outbound network calls are when a user voluntarily copies a prompt and pastes it into an external AI provider.
-
----
-
-## How It Was Built
-
-This project started as a personal tooling problem: writing KQL queries from scratch for every new hunt is slow, and not every analyst on a team has deep KQL expertise. The goal was to create a bridge — something that lets an analyst describe what they're looking for in plain language and receive a query they can immediately drop into Sentinel.
-
-### Architecture Decision: Client-Side Only
-
-The deliberate choice to build this as a single HTML file with no backend, no npm, no build step was intentional. The tool needed to be:
-
-- **Portable** — double-click and it works, no setup
-- **Air-gappable** — usable in environments where internet access is restricted or tooling approval is slow
-- **Auditable** — the entire codebase is in one file; nothing is hidden
-
-This meant vanilla JavaScript, inline CSS, and no external dependencies whatsoever.
-
-### The Prompt Engineering Layer
-
-The core of the tool is a carefully structured system prompt embedded in the JavaScript (`INSTRUCTIONS` constant). It instructs the AI to:
-
-1. Act as a Microsoft Sentinel KQL engineer
-2. Apply the CMU CERT Insider Threat Framework categories to insider threat scenarios
-3. Return a **strictly structured JSON object** — no prose, no markdown fences — containing the query, MITRE mappings, explanation fields, false positives, response actions, and hunting tips
-
-The JSON-only output requirement was critical. It allows the tool to parse the AI response deterministically and render each field into its own UI section rather than dumping raw text.
-
-The prompt template is parameterized at build time with three analyst-controlled variables:
-- `tableHint` — target Sentinel/MDE table, or auto-detect
-- `timeRange` — sliding window (1d, 7d, 14d, 30d, 90d)
-- `severityOverride` — expected alert severity, or auto-detect
-
-### Workflow Design
-
-Because this tool doesn't call AI APIs directly (to avoid requiring API keys and to keep the tool usable with any AI provider), the workflow is a three-step copy-paste loop:
-
-```
-1. Analyst describes behavior → tool builds structured prompt
-2. Analyst copies prompt → pastes into AI of choice → copies JSON response
-3. Analyst pastes response → tool parses JSON → renders formatted results
-```
-
-This approach works with Claude, ChatGPT, Gemini, Microsoft Copilot, or Perplexity — the tool has a provider selector that opens the chosen AI in a new tab.
-
-### PDF Import Feature
-
-A later addition to the tool was the PDF import feature. Analysts frequently receive threat intelligence as PDF reports, incident exports, or alert summaries. Instead of manually re-typing IOC values and behavioral descriptions into the hunt input, the PDF parser:
-
-1. Reads the PDF client-side using the browser's built-in file APIs
-2. Extracts raw text
-3. Runs regex-based IOC detection for IPs, domains, hashes, CVEs, file paths, and MITRE tactic keywords
-4. Auto-populates the hunt description field with a generated summary of the threat behavior
-
-The PDF extraction is entirely local — the file never leaves the browser.
-
-### KQL Syntax Highlighting
-
-The KQL output is rendered with a lightweight client-side syntax highlighter built specifically for KQL. It applies color classes to:
-
-- Keywords (`let`, `where`, `project`, `summarize`, `extend`, `join`, `union`)
-- Functions (`ago()`, `tolower()`, `contains`, `startswith`)
-- Operators (`==`, `!=`, `=~`, `|`)
-- String literals, comments, table names, and variable references
-
-This was implemented with a series of regex passes over the query string, replacing matched tokens with `<span>` elements carrying CSS color classes. No external syntax highlighting library was used.
-
-### MITRE ATT&CK Display
-
-Each AI response includes a `mitre` array of technique objects. The tool renders these as individual cards showing the technique ID, name, and tactic — styled to visually distinguish them from the rest of the output. Technique IDs link conceptually to the ATT&CK framework (though not as hyperlinks, to avoid unintentional outbound navigation in restricted environments).
-
-### Export System
-
-Completed hunting packages can be exported as a `.md` (Markdown) file containing:
-
-- A generated hunt ID (timestamp-based)
-- The original behavior description
-- The full KQL query in a fenced code block
-- MITRE ATT&CK technique table
-- Explanation sections (what/how/why)
-- False positives list
-- Response actions
-- Hunting tips
-
-This format is designed to be dropped directly into a JIRA ticket, Confluence page, or incident report.
+Everything runs in the browser. No server, no backend. When an API key is configured, queries are generated in one click with no copy-paste required.
 
 ---
 
-## Features
+## What It Does
 
-- **Plain English to KQL** — describe suspicious behavior, get a production-ready query
-- **PDF import** — drag-and-drop incident reports; IOCs and behaviors extracted automatically
-- **AI provider agnostic** — works with Claude, ChatGPT, Gemini, Copilot, Perplexity
-- **25+ built-in examples** — categorized as Insider, Exfil, and General threat hunting scenarios
-- **MITRE ATT&CK mapping** — every query tagged with relevant technique IDs and tactics
-- **CMU CERT categorization** — insider threat queries tagged as IP Theft, IT Sabotage, Fraud, or Espionage
-- **KQL syntax highlighting** — color-coded output for keywords, functions, operators, strings
-- **Table selector** — target specific Sentinel or MDE tables, or let the AI choose
-- **Time range selector** — 1d, 7d, 14d, 30d, 90d sliding windows
-- **Severity selector** — High, Medium, Low, Informational, or auto
-- **False positives panel** — AI-generated list of expected benign triggers per query
-- **Response actions panel** — concrete next steps after a hunt fires
-- **Hunting tips panel** — tuning and follow-on investigation guidance
-- **Export to Markdown** — download a complete hunting package as `.md`
-- **Copy to clipboard** — one-click copy for the prompt or the KQL query
-- **Zero dependencies** — single HTML file, runs offline
+1. **Plain English to KQL** — describe suspicious behavior, get a production-ready query
+2. **One-click AI generation** — configure a Groq, Anthropic, or Gemini API key and generate queries instantly with no copy-paste loop
+3. **Manual fallback** — build a structured prompt and paste into any AI (Claude, ChatGPT, Gemini, Copilot, Perplexity) for air-gapped or restricted environments
+4. **PDF import** — drag-and-drop incident reports; IOCs and behaviors extracted automatically, hunt description auto-populated
+5. **25+ built-in examples** — categorized as Insider, Exfil, and General threat hunting scenarios
+6. **MITRE ATT&CK mapping** — every query tagged with technique IDs and tactics, each card links directly to attack.mitre.org
+7. **CMU CERT categorization** — insider threat queries tagged as IP Theft, IT Sabotage, Fraud, or Espionage
+8. **KQL syntax highlighting** — color-coded output for keywords, functions, operators, strings, table names
+9. **Table selector** — target specific Sentinel or MDE tables, or let the AI choose
+10. **Time range selector** — 1d, 7d, 14d, 30d, 90d sliding windows
+11. **Severity selector** — High, Medium, Low, Informational, or auto
+12. **Hunt Analysis** — what the query detects, how the logic works, why it indicates threat activity
+13. **False positives panel** — AI-generated list of expected benign triggers per query
+14. **Response actions panel** — concrete next steps after a hunt fires
+15. **Hunting tips panel** — tuning and follow-on investigation guidance
+16. **Query history** — last 10 generated queries auto-saved to localStorage, click any entry to restore instantly
+17. **Saved query library** — permanently star/save queries with custom labels (e.g. "IR-2024-042 PowerShell Exfil"), export entire library as `.md`
+18. **Export to Markdown** — download a complete hunting package as `.md`
+19. **Export to JSON** — download the full result as structured `.json` for scripting or SIEM ingestion
+20. **Sentinel ARM template** — export as an Azure Resource Manager template deployable directly into Sentinel as a Scheduled Analytics Rule
+21. **Zero dependencies** — single HTML file, runs offline, air-gappable
+
+---
+
+## AI Provider Support
+
+| Provider | Cost | Key prefix | Get a key |
+|----------|------|-----------|-----------|
+| **Groq** | Free (14,400 req/day) | `gsk_...` | console.groq.com |
+| **Anthropic** | ~$0.01–0.08/query | `sk-ant-...` | console.anthropic.com |
+| **Gemini** | Paid (billing required) | `AIza...` | aistudio.google.com |
+
+API keys are stored in your browser's localStorage only — never transmitted anywhere except to the chosen AI provider.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vanilla JavaScript, inline CSS |
+| AI | Groq (Llama 3.3 70B), Anthropic Claude Haiku, Google Gemini |
+| Frameworks | MITRE ATT&CK, CMU CERT Insider Threat |
+| Dependencies | None |
 
 ---
 
@@ -130,7 +73,7 @@ This format is designed to be dropped directly into a JIRA ticket, Confluence pa
 
 | Table | Source | Use Case |
 |-------|--------|----------|
-| `SecurityEvent` | Windows Security log (MMA/AMA) | Process execution, logon events |
+| `SecurityEvent` | Windows Security log | Process execution, logon events |
 | `DeviceProcessEvents` | MDE | Endpoint process behavior |
 | `DeviceNetworkEvents` | MDE | Network connections from endpoints |
 | `DeviceFileEvents` | MDE | File creation, modification, deletion |
@@ -141,7 +84,7 @@ This format is designed to be dropped directly into a JIRA ticket, Confluence pa
 | `OfficeActivity` | Microsoft 365 | SharePoint, OneDrive, Exchange |
 | `CloudAppEvents` | Defender for Cloud Apps | SaaS app activity |
 | `AzureActivity` | Azure Control Plane | Resource management actions |
-| `Syslog` | Linux (MMA/AMA) | Linux system events |
+| `Syslog` | Linux | Linux system events |
 | `CommonSecurityLog` | CEF sources | Firewall, proxy, network appliances |
 
 ---
@@ -151,10 +94,10 @@ This format is designed to be dropped directly into a JIRA ticket, Confluence pa
 ### Insider Threat (CMU CERT Framework)
 
 | Category | Scenario |
-|----------|----------|
+|----------|---------|
 | IP Theft | Mass bulk download from SharePoint/OneDrive before termination |
 | IP Theft | Email forwarding to personal address via Outlook rules |
-| IP Theft | Large file upload to personal cloud storage (Dropbox, Google Drive) |
+| IP Theft | Large file upload to personal cloud storage |
 | IP Theft | Sensitive file access outside user's department scope |
 | IT Sabotage | Mass file/SharePoint deletion before or after account deactivation |
 | IT Sabotage | Privileged user disabling security controls or audit logging |
@@ -166,16 +109,16 @@ This format is designed to be dropped directly into a JIRA ticket, Confluence pa
 ### Exfiltration / Staging
 
 | Scenario |
-|----------|
+|---------|
 | USB storage connected followed by large file copy |
 | Data staged in temp folder then archived with 7-Zip/WinRAR |
-| DNS exfiltration via unusually long subdomains or high-volume TXT queries |
+| DNS exfiltration via unusually long subdomains |
 | Sensitive keyword search across SharePoint/OneDrive |
 
 ### General Threat Hunting
 
 | Scenario |
-|----------|
+|---------|
 | PowerShell downloading and executing a file from the internet |
 | Brute force against Azure AD accounts |
 | Lateral movement via PsExec or WMI |
@@ -193,59 +136,52 @@ This format is designed to be dropped directly into a JIRA ticket, Confluence pa
 
 None. Open `index.html` in any modern browser.
 
-### Workflow
+### Setup (optional — for one-click generation)
 
-**1. (Optional) Import a PDF**
+1. Get a free API key from [console.groq.com](https://console.groq.com) or a paid key from [console.anthropic.com](https://console.anthropic.com)
+2. Click the **⚙** gear icon in the top-right header
+3. Paste your key — the provider is auto-detected from the key prefix
+4. Click **Save key**
 
-Drag and drop an incident report, threat intel PDF, or alert export onto the import zone. The tool extracts IOCs and behaviors and pre-fills the hunt description.
+The **Generate with AI** button will appear next to Build Prompt.
 
-**2. Describe the behavior**
+### Workflow (with API key)
 
-Type or paste a plain-English description of what you want to hunt for. Use the quick-example pills for common scenarios. Adjust the table hint, time range, and severity selectors.
+1. (Optional) Drop a PDF incident report — IOCs and behaviors extracted automatically
+2. Describe the behavior or click a quick example pill
+3. Set table, time range, and severity
+4. Click **Generate with AI** — KQL and analysis appear instantly
+5. Click MITRE technique cards to open attack.mitre.org
+6. Star the query to save it permanently, rename it by incident (e.g. "IR-2024-042")
+7. Export as `.md`, `.json`, or Sentinel ARM template
 
-**3. Build the prompt**
+### Workflow (manual / air-gapped)
 
-Click **Build Prompt** (or press `Ctrl+Enter` / `Cmd+Enter`). The tool assembles a structured system prompt with your description and parameters.
-
-**4. Get the KQL**
-
-Copy the generated prompt. Open your AI of choice (use the provider selector to open it in a new tab). Paste the prompt into a new conversation. Copy the entire JSON response the AI returns.
-
-**5. Render the results**
-
-Paste the AI's JSON response into the **Paste AI Response** box. Click **Render Results**. The tool parses the JSON and displays:
-- The formatted KQL query with syntax highlighting
-- MITRE ATT&CK technique cards
-- Hunt analysis (what/how/why)
-- False positives, response actions, and hunting tips
-
-**6. Export**
-
-Click **Download .md** to save the full hunting package as a Markdown file, or **Copy Markdown** to paste it into a ticket or document.
+1. Describe the behavior and click **Build Prompt**
+2. Copy the prompt, open your AI of choice, paste and get the JSON response
+3. Paste the JSON response into the **Paste AI Response** box
+4. Click **Render Results**
 
 ---
 
-## Companion Document
+## Export Options
 
-`insider-threat-hunting-library.md` is a standalone reference document included in this repository. It contains:
-
-- The full master KQL generation prompt (for use without the web app)
-- A categorized library of 25+ insider threat hunting scenarios covering IP theft, IT sabotage, fraud, espionage, and unintentional insider threat
-- MITRE ATT&CK technique mappings per scenario
-- Quick reference table of recommended Sentinel tables per behavior type
-- Instructions for running queries in Log Analytics and Defender Advanced Hunting
-
-Use this document independently with any AI assistant, or as a reference when building manual queries.
+| Format | Use case |
+|--------|---------|
+| **Markdown (.md)** | JIRA tickets, Confluence, incident reports |
+| **JSON (.json)** | Scripting, SIEM ingestion, automation pipelines |
+| **Sentinel ARM Template** | Deploy directly to Azure Sentinel as a Scheduled Analytics Rule |
+| **Library Export (.md)** | Export entire saved query library as a single Markdown file |
 
 ---
 
 ## Security & Data Handling
 
 - **No data is transmitted from this page.** All processing is client-side.
-- The PDF parser runs entirely in the browser — no file contents leave the machine.
-- When a prompt is copied and pasted into an external AI provider, standard data-handling policies for that provider apply.
-- A persistent banner in the UI reminds analysts not to paste sensitive or regulated data into external AI services without organizational approval.
-- No API keys, credentials, or session tokens are stored or transmitted by this tool.
+- PDF parsing runs entirely in the browser — no file contents leave the machine.
+- API keys are stored in localStorage only — never sent anywhere except the AI provider.
+- When a prompt is sent to an AI provider, standard data-handling policies for that provider apply.
+- A persistent banner reminds analysts not to paste sensitive or regulated data into external AI services.
 
 ---
 
@@ -263,6 +199,6 @@ kql-hunt-gen/
 
 - Query quality depends on the AI model used. Always review generated KQL before running in production.
 - Queries are hunting queries, not detection rules. Validate against your environment's baseline before promoting to scheduled analytics.
-- Table names and field mappings assume Microsoft-native data sources. Third-party SIEM or EDR products will require adaptation.
+- Table names and field mappings assume Microsoft-native data sources.
 - The PDF parser extracts text only — scanned/image-based PDFs without embedded text will not parse correctly.
-- The tool does not validate that generated KQL is syntactically correct; use the Sentinel query editor's validation before executing.
+- The tool does not validate KQL syntax; use the Sentinel query editor's validation before executing.
