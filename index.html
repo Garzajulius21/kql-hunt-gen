@@ -503,6 +503,88 @@
     .generate-bar { flex-direction: column; align-items: stretch; }
     .btn-primary  { justify-content: center; }
   }
+
+  /* ── Settings button in header ── */
+  .btn-settings {
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 5px; padding: 4px 8px; cursor: pointer;
+    color: var(--text-dim); font-size: 14px; line-height: 1;
+    transition: border-color .15s, color .15s; margin-left: 8px;
+  }
+  .btn-settings:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+
+  /* ── Generate with AI button ── */
+  .btn-ai-generate {
+    background: linear-gradient(135deg, #0a3a1a, #052810);
+    color: var(--green); border: 1px solid rgba(0,255,136,.3);
+    box-shadow: 0 0 12px rgba(0,255,136,.15);
+    display: inline-flex; align-items: center; gap: 7px;
+    border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; padding: 8px 16px;
+    transition: all .15s; white-space: nowrap; letter-spacing: .02em;
+  }
+  .btn-ai-generate:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0d4a22, #073515);
+    box-shadow: 0 0 22px rgba(0,255,136,.3); transform: translateY(-1px);
+  }
+  .btn-ai-generate:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .btn-ai-generate .ai-spinner {
+    width: 13px; height: 13px; border: 2px solid rgba(0,255,136,.3);
+    border-top-color: var(--green); border-radius: 50%;
+    animation: spin .7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Settings modal ── */
+  .settings-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .settings-overlay.hidden { display: none; }
+  .settings-panel {
+    background: var(--bg-card); border: 1px solid var(--border-hi);
+    border-radius: 12px; padding: 28px; width: 100%; max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); position: relative;
+  }
+  .settings-title {
+    font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .settings-subtitle { font-size: 12px; color: var(--text-dim); margin-bottom: 22px; line-height: 1.6; }
+  .settings-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); margin-bottom: 7px; display: block; }
+  .settings-input {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 7px; color: var(--text); font-size: 13px; font-family: var(--mono);
+    padding: 10px 14px; outline: none; transition: border-color .2s;
+    letter-spacing: .04em;
+  }
+  .settings-input:focus { border-color: var(--cyan-dim); }
+  .settings-provider-badge {
+    margin-top: 8px; font-size: 11px; padding: 4px 10px;
+    border-radius: 4px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .badge-gemini   { background: rgba(0,212,255,.1); color: var(--cyan);  border: 1px solid rgba(0,212,255,.2); }
+  .badge-anthropic{ background: rgba(168,85,247,.1);color: #c084fc;      border: 1px solid rgba(168,85,247,.25); }
+  .badge-unknown  { background: rgba(90,122,154,.1); color: var(--text-dim); border: 1px solid var(--border); }
+  .settings-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+  .settings-close-x {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1;
+    border-radius: 4px; transition: color .15s;
+  }
+  .settings-close-x:hover { color: var(--text); }
+  .settings-hint { font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.6; }
+  .settings-hint a { color: var(--cyan-dim); text-decoration: none; }
+  .settings-hint a:hover { text-decoration: underline; }
+  .settings-saved-row {
+    margin-top: 14px; padding: 10px 14px;
+    background: rgba(0,255,136,.06); border: 1px solid rgba(0,255,136,.2);
+    border-radius: 6px; font-size: 12px; color: var(--green);
+    display: none; align-items: center; gap: 8px;
+  }
+  .settings-saved-row.visible { display: flex; }
 </style>
 </head>
 <body>
@@ -525,8 +607,46 @@
   <div class="header-status">
     <div class="status-dot" id="status-dot"></div>
     <span id="status-label">Idle</span>
+    <button class="btn-settings" onclick="openSettings()" title="API key settings">⚙</button>
   </div>
 </header>
+
+<!-- ══════════════ SETTINGS MODAL ══════════════ -->
+<div class="settings-overlay hidden" id="settings-overlay" onclick="overlayClick(event)">
+  <div class="settings-panel">
+    <button class="settings-close-x" onclick="closeSettings()">✕</button>
+    <div class="settings-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      AI API Key
+    </div>
+    <div class="settings-subtitle">
+      Paste a Gemini or Anthropic API key to enable one-click query generation — no copy-paste loop required.<br>
+      The key is stored in your browser only and never transmitted anywhere except the AI provider.
+    </div>
+
+    <label class="settings-label" for="api-key-input">API Key</label>
+    <input type="password" class="settings-input" id="api-key-input"
+      placeholder="AIzaSy… (Gemini) or sk-ant-… (Anthropic)"
+      oninput="onApiKeyInput(this.value)"
+      autocomplete="off" spellcheck="false">
+    <div class="settings-provider-badge badge-unknown" id="provider-badge">No key entered</div>
+
+    <div class="settings-hint">
+      <strong>Gemini (free):</strong> Get a free key at <a href="https://aistudio.google.com" target="_blank" rel="noopener">aistudio.google.com</a> → Get API key. No credit card required.<br>
+      <strong>Anthropic (paid):</strong> Get a key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>. ~$0.01–0.08 per query.
+    </div>
+
+    <div class="settings-saved-row" id="settings-saved-row">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Key saved — AI generation enabled
+    </div>
+
+    <div class="settings-actions">
+      <button class="btn btn-ghost" onclick="clearApiKey()">Clear key</button>
+      <button class="btn btn-primary" onclick="saveApiKey()">Save key</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════════ MAIN ══════════════ -->
 <main>
@@ -662,10 +782,16 @@
             <option value="Informational">Informational</option>
           </select>
         </div>
-        <button class="btn btn-primary" id="generate-btn" onclick="buildPrompt()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-          Build Prompt
-        </button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-ai-generate" id="ai-gen-btn" onclick="generateWithAI()" style="display:none;" title="Generate KQL directly using your API key">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span id="ai-gen-label">Generate with AI</span>
+          </button>
+          <button class="btn btn-primary" id="generate-btn" onclick="buildPrompt()" title="Build prompt for manual copy-paste">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Build Prompt
+          </button>
+        </div>
       </div>
 
     </div>
@@ -1638,6 +1764,202 @@ function showPDFWarn(msg) {
     zone.querySelector('.pdf-drop-title').textContent = 'Drop a PDF here, or click to browse';
   }, 3000);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DIRECT AI GENERATION
+// ══════════════════════════════════════════════════════════════════════════════
+
+let savedApiKey = localStorage.getItem('kql_api_key') || '';
+
+function detectProvider(key) {
+  if (!key) return null;
+  if (key.startsWith('AIza')) return 'gemini';
+  if (key.startsWith('sk-ant-')) return 'anthropic';
+  return 'unknown';
+}
+
+function updateAIGenButton() {
+  const btn = document.getElementById('ai-gen-btn');
+  if (savedApiKey && detectProvider(savedApiKey) !== 'unknown') {
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+// ── Settings modal ─────────────────────────────────────────────────────────
+function openSettings() {
+  const overlay = document.getElementById('settings-overlay');
+  const input   = document.getElementById('api-key-input');
+  overlay.classList.remove('hidden');
+  input.value = savedApiKey;
+  onApiKeyInput(savedApiKey);
+  if (savedApiKey) {
+    document.getElementById('settings-saved-row').classList.add('visible');
+  }
+  input.focus();
+}
+
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.add('hidden');
+  document.getElementById('settings-saved-row').classList.remove('visible');
+}
+
+function overlayClick(e) {
+  if (e.target === document.getElementById('settings-overlay')) closeSettings();
+}
+
+function onApiKeyInput(val) {
+  const badge    = document.getElementById('provider-badge');
+  const provider = detectProvider(val.trim());
+  badge.className = 'settings-provider-badge';
+  if (!val.trim()) {
+    badge.textContent = 'No key entered';
+    badge.classList.add('badge-unknown');
+  } else if (provider === 'gemini') {
+    badge.textContent = '✓ Gemini API key detected';
+    badge.classList.add('badge-gemini');
+  } else if (provider === 'anthropic') {
+    badge.textContent = '✓ Anthropic API key detected';
+    badge.classList.add('badge-anthropic');
+  } else {
+    badge.textContent = 'Unrecognised key format';
+    badge.classList.add('badge-unknown');
+  }
+}
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val) { clearApiKey(); return; }
+  savedApiKey = val;
+  localStorage.setItem('kql_api_key', val);
+  updateAIGenButton();
+  document.getElementById('settings-saved-row').classList.add('visible');
+  setTimeout(closeSettings, 900);
+}
+
+function clearApiKey() {
+  savedApiKey = '';
+  localStorage.removeItem('kql_api_key');
+  document.getElementById('api-key-input').value = '';
+  onApiKeyInput('');
+  document.getElementById('settings-saved-row').classList.remove('visible');
+  updateAIGenButton();
+}
+
+// ── Call Gemini ────────────────────────────────────────────────────────────
+async function callGemini(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${savedApiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Gemini API error: HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// ── Call Anthropic ─────────────────────────────────────────────────────────
+async function callAnthropic(prompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': savedApiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Anthropic API error: HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text || '';
+}
+
+// ── Main generate function ─────────────────────────────────────────────────
+async function generateWithAI() {
+  hideError();
+
+  const description = document.getElementById('prompt').value.trim();
+  if (!description) {
+    showError('Please describe the suspicious behavior you want to hunt for.');
+    return;
+  }
+
+  const provider = detectProvider(savedApiKey);
+  if (!provider || provider === 'unknown') {
+    showError('No valid API key configured. Click ⚙ in the header to add one.');
+    return;
+  }
+
+  const tableHint = document.getElementById('table-hint').value;
+  const timeRange = document.getElementById('time-range').value;
+  const sevHint   = document.getElementById('severity-hint').value;
+  const prompt    = buildAIPrompt(description, tableHint, timeRange, sevHint);
+
+  // Update UI — loading state
+  const btn   = document.getElementById('ai-gen-btn');
+  const label = document.getElementById('ai-gen-label');
+  btn.disabled = true;
+  label.innerHTML = '<span class="ai-spinner"></span> Generating…';
+  setStatus('busy', 'Generating…');
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('prompt-card').classList.remove('visible');
+  document.getElementById('response-card').classList.remove('visible');
+  currentResult = { prompt: description, timeRange, tableHint, result: null };
+
+  try {
+    let raw;
+    if (provider === 'gemini') {
+      raw = await callGemini(prompt);
+    } else {
+      raw = await callAnthropic(prompt);
+    }
+
+    // Parse JSON — reuse existing logic
+    const cleaned = raw.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+    let result;
+    try {
+      result = JSON.parse(cleaned);
+    } catch {
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Could not parse JSON from AI response. Try again.');
+      result = JSON.parse(match[0]);
+    }
+
+    if (!result.query) throw new Error('AI response missing "query" field. Try again.');
+
+    currentResult.result = result;
+    renderResults(result);
+    setStatus('ready', 'Query ready');
+
+  } catch (err) {
+    // Never expose the API key in error messages
+    const safeMsg = err.message ? err.message.replace(savedApiKey, '[REDACTED]') : 'Generation failed';
+    showError(safeMsg);
+    setStatus('error', 'Error');
+  } finally {
+    btn.disabled = false;
+    label.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate with AI';
+  }
+}
+
+// ── Init: restore saved key state ──────────────────────────────────────────
+updateAIGenButton();
 </script>
 </body>
 </html>
