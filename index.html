@@ -585,6 +585,64 @@
     display: none; align-items: center; gap: 8px;
   }
   .settings-saved-row.visible { display: flex; }
+
+  /* ── Query History ── */
+  .history-section {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  .history-header {
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(0,0,0,.2); cursor: pointer; user-select: none;
+  }
+  .history-header:hover { background: rgba(0,0,0,.3); }
+  .history-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .history-count {
+    background: rgba(0,212,255,.1); color: var(--cyan);
+    border: 1px solid rgba(0,212,255,.2);
+    border-radius: 10px; padding: 1px 7px; font-size: 10px;
+  }
+  .history-chevron { color: var(--text-muted); font-size: 11px; transition: transform .2s; }
+  .history-chevron.open { transform: rotate(180deg); }
+  .history-body { display: none; padding: 10px; }
+  .history-body.open { display: grid; gap: 6px; }
+  .history-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--bg-input);
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .history-item:hover { border-color: var(--cyan-dim); background: rgba(0,212,255,.04); }
+  .history-item-main { flex: 1; min-width: 0; }
+  .history-item-desc {
+    font-size: 12px; color: var(--text); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
+  }
+  .history-item-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .history-meta-tag {
+    font-size: 10px; color: var(--text-muted);
+    font-family: var(--mono); white-space: nowrap;
+  }
+  .history-sev {
+    font-size: 10px; font-weight: 600; padding: 1px 6px;
+    border-radius: 3px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .history-sev-high   { background: rgba(255,68,68,.12);  color: var(--red);    border: 1px solid rgba(255,68,68,.2); }
+  .history-sev-medium { background: rgba(255,149,0,.12);  color: var(--orange); border: 1px solid rgba(255,149,0,.2); }
+  .history-sev-low    { background: rgba(0,255,136,.12);  color: var(--green);  border: 1px solid rgba(0,255,136,.2); }
+  .history-sev-informational { background: rgba(0,212,255,.1); color: var(--cyan); border: 1px solid rgba(0,212,255,.2); }
+  .history-item-del {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 3px;
+    transition: color .15s; flex-shrink: 0; line-height: 1;
+  }
+  .history-item-del:hover { color: var(--red); }
+  .history-empty { font-size: 12px; color: var(--text-muted); padding: 12px; text-align: center; }
 </style>
 </head>
 <body>
@@ -937,6 +995,20 @@
     </div>
 
   </div>
+
+  <!-- ⑥ Query History -->
+  <div class="history-section" id="history-section" style="display:none;">
+    <div class="history-header" onclick="toggleHistory()">
+      <span class="history-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Recent Queries
+        <span class="history-count" id="history-count">0</span>
+      </span>
+      <span class="history-chevron" id="history-chevron">▼</span>
+    </div>
+    <div class="history-body" id="history-body"></div>
+  </div>
+
 </main>
 
 <!-- ══════════════ SCRIPT ══════════════ -->
@@ -1849,7 +1921,7 @@ function clearApiKey() {
 
 // ── Call Gemini ────────────────────────────────────────────────────────────
 async function callGemini(prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${savedApiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${savedApiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1960,6 +2032,130 @@ async function generateWithAI() {
 
 // ── Init: restore saved key state ──────────────────────────────────────────
 updateAIGenButton();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// QUERY HISTORY
+// ══════════════════════════════════════════════════════════════════════════════
+
+const HISTORY_KEY = 'kql_query_history';
+const HISTORY_MAX = 10;
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveHistory(entries) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(entries)); } catch {}
+}
+
+function addToHistory(entry) {
+  let entries = loadHistory();
+  // Remove duplicate descriptions
+  entries = entries.filter(e => e.description !== entry.description);
+  entries.unshift(entry);
+  if (entries.length > HISTORY_MAX) entries = entries.slice(0, HISTORY_MAX);
+  saveHistory(entries);
+  renderHistory();
+}
+
+function deleteFromHistory(index, e) {
+  e.stopPropagation();
+  const entries = loadHistory();
+  entries.splice(index, 1);
+  saveHistory(entries);
+  renderHistory();
+}
+
+function toggleHistory() {
+  const body    = document.getElementById('history-body');
+  const chevron = document.getElementById('history-chevron');
+  const open    = body.classList.toggle('open');
+  chevron.classList.toggle('open', open);
+}
+
+function renderHistory() {
+  const entries = loadHistory();
+  const section = document.getElementById('history-section');
+  const body    = document.getElementById('history-body');
+  const count   = document.getElementById('history-count');
+
+  count.textContent = entries.length;
+  section.style.display = entries.length > 0 ? '' : 'none';
+
+  if (entries.length === 0) {
+    body.innerHTML = '<div class="history-empty">No queries yet</div>';
+    return;
+  }
+
+  body.innerHTML = entries.map((e, i) => {
+    const sev   = (e.severity || 'medium').toLowerCase();
+    const table = e.tableHint === 'auto' ? 'Auto table' : e.tableHint;
+    const date  = e.generatedAt ? new Date(e.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    return `
+      <div class="history-item" onclick="reloadHistory(${i})">
+        <div class="history-item-main">
+          <div class="history-item-desc" title="${esc(e.description)}">${esc(e.description)}</div>
+          <div class="history-item-meta">
+            <span class="history-sev history-sev-${sev}">${esc(e.severity || 'Medium')}</span>
+            <span class="history-meta-tag">${esc(table)}</span>
+            <span class="history-meta-tag">${esc(e.timeRange || '7d')}</span>
+            ${date ? `<span class="history-meta-tag">${date}</span>` : ''}
+          </div>
+        </div>
+        <button class="history-item-del" onclick="deleteFromHistory(${i}, event)" title="Remove">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function reloadHistory(index) {
+  const entries = loadHistory();
+  const e = entries[index];
+  if (!e) return;
+
+  // Restore input fields
+  document.getElementById('prompt').value = e.description;
+  updateCharCount(document.getElementById('prompt'));
+  if (e.tableHint) document.getElementById('table-hint').value = e.tableHint;
+  if (e.timeRange) document.getElementById('time-range').value = e.timeRange;
+  if (e.severity)  document.getElementById('severity-hint').value = e.severity;
+
+  // Restore results if saved
+  if (e.result) {
+    currentResult = {
+      prompt: e.description,
+      timeRange: e.timeRange,
+      tableHint: e.tableHint,
+      result: e.result,
+      huntId: e.huntId,
+      generatedAt: e.generatedAt
+    };
+    renderResults(e.result);
+    setStatus('ready', 'Query ready');
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Hook into generateWithAI and parseResponse to save history ─────────────
+const _origRenderResults = renderResults;
+renderResults = function(r) {
+  _origRenderResults(r);
+  if (currentResult) {
+    addToHistory({
+      description: currentResult.prompt || '',
+      tableHint:   currentResult.tableHint || 'auto',
+      timeRange:   currentResult.timeRange || '7d',
+      severity:    r.severity || 'Medium',
+      result:      r,
+      huntId:      currentResult.huntId,
+      generatedAt: currentResult.generatedAt || new Date().toISOString()
+    });
+  }
+};
+
+// ── Init history on load ───────────────────────────────────────────────────
+renderHistory();
 </script>
 </body>
 </html>
