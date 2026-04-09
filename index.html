@@ -1043,6 +1043,14 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download .md
             </button>
+            <button class="btn btn-ghost" onclick="exportJSON()" title="Export as JSON">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              JSON
+            </button>
+            <button class="btn btn-ghost" onclick="exportARM()" title="Export as Sentinel Analytics Rule (ARM template)" style="color:var(--cyan);border-color:rgba(0,212,255,.3);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              Sentinel Rule
+            </button>
           </div>
         </div>
       </div>
@@ -1571,6 +1579,100 @@ function exportMarkdown() {
   if (!md) return;
   const name = (currentResult?.huntId || 'hunt') + '.md';
   const blob = new Blob([md], { type: 'text/markdown' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportJSON() {
+  if (!currentResult?.result) return;
+  const { result: r, prompt, huntId, generatedAt, timeRange, tableHint } = currentResult;
+  const payload = {
+    huntId:      huntId || null,
+    generatedAt: generatedAt || new Date().toISOString(),
+    description: prompt || '',
+    timeRange:   timeRange || '7d',
+    tableHint:   tableHint || 'auto',
+    severity:    r.severity || 'Medium',
+    certCategory: r.certCategory || null,
+    query:       r.query,
+    mitre:       r.mitre || [],
+    what:        r.what || '',
+    how:         r.how || '',
+    why:         r.why || '',
+    falsePositives:  r.falsePositives || [],
+    responseActions: r.responseActions || [],
+    huntingTips:     r.huntingTips || []
+  };
+  const name = (huntId || 'hunt') + '.json';
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportARM() {
+  if (!currentResult?.result) return;
+  const { result: r, prompt, huntId, timeRange } = currentResult;
+  const displayName = (prompt || 'KQL Hunt').slice(0, 100);
+  const ruleName    = (huntId || 'kql-hunt-' + Date.now().toString(36)).toLowerCase();
+  const mitreIds    = (r.mitre || []).map(t => t.id);
+
+  const arm = {
+    '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#',
+    contentVersion: '1.0.0.0',
+    resources: [
+      {
+        type: 'Microsoft.OperationalInsights/workspaces/providers/alertRules',
+        apiVersion: '2022-11-01-preview',
+        name: `[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/', '${ruleName}')]`,
+        kind: 'Scheduled',
+        properties: {
+          displayName:          displayName,
+          description:          r.what || displayName,
+          severity:             r.severity || 'Medium',
+          enabled:              false,
+          query:                r.query,
+          queryFrequency:       'PT1H',
+          queryPeriod:          timeRange === '1d' ? 'P1D' : timeRange === '7d' ? 'P7D' : timeRange === '14d' ? 'P14D' : timeRange === '30d' ? 'P30D' : 'P1D',
+          triggerOperator:      'GreaterThan',
+          triggerThreshold:     0,
+          suppressionDuration:  'PT1H',
+          suppressionEnabled:   false,
+          tactics:              [...new Set((r.mitre || []).map(t => t.tactic).filter(Boolean))],
+          techniques:           mitreIds,
+          alertRuleTemplateName: null,
+          incidentConfiguration: {
+            createIncident: true,
+            groupingConfiguration: {
+              enabled: false,
+              reopenClosedIncident: false,
+              lookbackDuration: 'PT5M',
+              matchingMethod: 'AllEntities',
+              groupByEntities: [],
+              groupByAlertDetails: [],
+              groupByCustomDetails: []
+            }
+          }
+        }
+      }
+    ],
+    parameters: {
+      workspaceName: {
+        type: 'string',
+        metadata: { description: 'Name of the Log Analytics workspace / Sentinel workspace' }
+      }
+    }
+  };
+
+  const name = ruleName + '-sentinel-rule.json';
+  const blob = new Blob([JSON.stringify(arm, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href = url; a.download = name;
