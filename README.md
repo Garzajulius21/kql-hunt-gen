@@ -195,6 +195,17 @@ kql-hunt-gen/
 
 ---
 
+## Storage Limits
+
+| Store | Limit | Behaviour |
+|-------|-------|-----------|
+| **Recent Queries** | 10 entries | Oldest entry drops automatically when limit is reached |
+| **Saved Library** | Unlimited | Entries persist permanently until manually deleted |
+
+Both stores use browser localStorage — clearing browser data will erase them.
+
+---
+
 ## Limitations
 
 - Query quality depends on the AI model used. Always review generated KQL before running in production.
