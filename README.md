@@ -1,10 +1,11 @@
 # SPECTER — Sentinel Threat Hunting Query Generator
 
-![Platform](https://img.shields.io/badge/Platform-Web%20%28Client--Side%29-blue)
-![Framework](https://img.shields.io/badge/Framework-MITRE%20ATT%26CK%20%2B%20CMU%20CERT-red)
-![AI](https://img.shields.io/badge/AI-Groq%20%7C%20Anthropic%20%7C%20Gemini-green)
-![Dependencies](https://img.shields.io/badge/Dependencies-None-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Production--Ready-success?style=for-the-badge)
+![Platform](https://img.shields.io/badge/Platform-Browser%20%7C%20Air--Gap%20Ready-blue?style=for-the-badge)
+![Framework](https://img.shields.io/badge/Framework-MITRE%20ATT%26CK%20%2B%20CMU%20CERT-red?style=for-the-badge)
+![AI](https://img.shields.io/badge/AI-Groq%20%7C%20Anthropic%20%7C%20Gemini-green?style=for-the-badge)
+![Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 ---
 
