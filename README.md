@@ -7,6 +7,8 @@
 ![Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
+<p align="center"><img src="docs/screenshots/kql_3_result.png" alt="SPECTER rendering a KQL hunt with MITRE ATT&CK mapping" width="860"></p>
+
 ---
 
 ## Overview
@@ -18,6 +20,14 @@ Aligned to two industry-standard frameworks:
 - **CMU CERT Insider Threat Framework** — IP theft, IT sabotage, fraud, and espionage categories
 
 Everything runs in the browser. No server, no backend. When an API key is configured, queries are generated in one click with no copy-paste required.
+
+---
+
+## Screenshots
+
+<p align="center"><img src="docs/screenshots/kql_1_home.png" alt="Describe behavior or import a PDF" width="420">&nbsp;<img src="docs/screenshots/kql_2_prompt.png" alt="Structured prompt ready for any AI assistant" width="420"></p>
+
+<p align="center"><sub>Describe behavior or import a PDF · Structured prompt ready for any AI assistant</sub></p>
 
 ---
 

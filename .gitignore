@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# Secrets — never commit real keys
+.env
+*.env.local
